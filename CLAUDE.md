@@ -15,7 +15,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run format:check` - Check formatting without making changes
 - `npm run f` - Format only changed files
 - `npm run l` - Lint only changed files
-- `npm test` - Run all tests
+- `npm run test` - Run all tests
 - `npm run test:watch` - Run tests in watch mode
 - `npm run test:integration` - Run integration tests
 - `npm run test:redteam:integration` - Run red team integration tests
@@ -56,3 +56,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Keep code DRY and use existing utilities where possible
 - Use Drizzle ORM for database operations
 - Workspaces include src/app and site directories
+
+## SaaS MVP Setup Plan
+
+- Define core product value proposition
+- Create initial user authentication flow
+- Develop minimal viable dashboard
+- Implement basic payment integration
+- Set up scalable infrastructure
+- Define initial feature set
+- Create onboarding and signup process
+- Establish basic analytics tracking
