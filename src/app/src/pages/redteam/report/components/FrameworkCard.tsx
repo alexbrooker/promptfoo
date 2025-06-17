@@ -219,7 +219,7 @@ const FrameworkCard: React.FC<FrameworkCardProps> = ({
                             </Typography>
                           </ListItem>
                         )}
-                        {sortedNonCompliantItems.map((plugin) => {
+                        {sortedNonCompliantItems.map((plugin, index) => {
                           const passRate = getPluginPassRate(plugin);
                           const pluginSeverity =
                             riskCategorySeverityMap[
@@ -228,7 +228,7 @@ const FrameworkCard: React.FC<FrameworkCardProps> = ({
 
                           return (
                             <ListItem
-                              key={plugin}
+                              key={`${categoryId}-failed-${plugin}-${index}`}
                               sx={{
                                 borderLeft: `3px solid ${getSeverityColor(pluginSeverity)}`,
                                 pl: 2,
@@ -285,7 +285,7 @@ const FrameworkCard: React.FC<FrameworkCardProps> = ({
                             </Typography>
                           </ListItem>
                         )}
-                        {sortedCompliantItems.map((plugin) => {
+                        {sortedCompliantItems.map((plugin, index) => {
                           const passRate = getPluginPassRate(plugin);
                           const pluginSeverity =
                             riskCategorySeverityMap[
@@ -294,7 +294,7 @@ const FrameworkCard: React.FC<FrameworkCardProps> = ({
 
                           return (
                             <ListItem
-                              key={plugin}
+                              key={`${categoryId}-passed-${plugin}-${index}`}
                               sx={{
                                 borderLeft: `3px solid ${getSeverityColor(pluginSeverity)}`,
                                 pl: 2,
@@ -355,7 +355,7 @@ const FrameworkCard: React.FC<FrameworkCardProps> = ({
                                 Not Tested:
                               </Typography>
                             </ListItem>
-                            {sortedUntestedItems.map((plugin) => {
+                            {sortedUntestedItems.map((plugin, index) => {
                               const pluginSeverity =
                                 riskCategorySeverityMap[
                                   plugin as keyof typeof riskCategorySeverityMap
@@ -363,7 +363,7 @@ const FrameworkCard: React.FC<FrameworkCardProps> = ({
 
                               return (
                                 <ListItem
-                                  key={plugin}
+                                  key={`${categoryId}-untested-${plugin}-${index}`}
                                   sx={{
                                     borderLeft: `3px solid ${getSeverityColor(pluginSeverity)}`,
                                     pl: 2,
@@ -463,7 +463,7 @@ const FrameworkCard: React.FC<FrameworkCardProps> = ({
                     </Typography>
                   </ListItem>
                 )}
-                {sortedPlugins.map((plugin) => {
+                {sortedPlugins.map((plugin, index) => {
                   const passRate = getPluginPassRate(plugin);
                   const pluginSeverity =
                     riskCategorySeverityMap[plugin as keyof typeof riskCategorySeverityMap] ||
@@ -471,7 +471,7 @@ const FrameworkCard: React.FC<FrameworkCardProps> = ({
 
                   return (
                     <ListItem
-                      key={plugin}
+                      key={`${framework}-failed-${plugin}-${index}`}
                       sx={{
                         borderLeft: `3px solid ${getSeverityColor(pluginSeverity)}`,
                         pl: 2,
@@ -542,7 +542,7 @@ const FrameworkCard: React.FC<FrameworkCardProps> = ({
 
                     return severityOrder[severityA] - severityOrder[severityB];
                   })
-                  .map((plugin) => {
+                  .map((plugin, index) => {
                     const passRate = getPluginPassRate(plugin);
                     const pluginSeverity =
                       riskCategorySeverityMap[plugin as keyof typeof riskCategorySeverityMap] ||
@@ -550,7 +550,7 @@ const FrameworkCard: React.FC<FrameworkCardProps> = ({
 
                     return (
                       <ListItem
-                        key={plugin}
+                        key={`${framework}-passed-${plugin}-${index}`}
                         sx={{
                           borderLeft: `3px solid ${getSeverityColor(pluginSeverity)}`,
                           pl: 2,
@@ -613,14 +613,14 @@ const FrameworkCard: React.FC<FrameworkCardProps> = ({
 
                     return severityOrder[severityA] - severityOrder[severityB];
                   })
-                  .map((plugin) => {
+                  .map((plugin, index) => {
                     const pluginSeverity =
                       riskCategorySeverityMap[plugin as keyof typeof riskCategorySeverityMap] ||
                       Severity.Low;
 
                     return (
                       <ListItem
-                        key={plugin}
+                        key={`${framework}-untested-${plugin}-${index}`}
                         sx={{
                           borderLeft: `3px solid ${getSeverityColor(pluginSeverity)}`,
                           pl: 2,

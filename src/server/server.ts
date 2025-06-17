@@ -35,6 +35,7 @@ import { configsRouter } from './routes/configs';
 import { evalRouter } from './routes/eval';
 import { providersRouter } from './routes/providers';
 import { redteamRouter } from './routes/redteam';
+import { stripeRouter } from './routes/stripe';
 import { userRouter } from './routes/user';
 
 // Prompts cache
@@ -47,6 +48,10 @@ export function createApp() {
 
   app.use(cors());
   app.use(compression());
+
+  // Use raw body parsing for Stripe webhooks
+  app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }));
+
   app.use(express.json({ limit: '100mb' }));
   app.use(express.urlencoded({ limit: '100mb', extended: true }));
   app.get('/health', (req, res) => {
@@ -178,6 +183,7 @@ export function createApp() {
   app.use('/api/eval', evalRouter);
   app.use('/api/providers', providersRouter);
   app.use('/api/redteam', redteamRouter);
+  app.use('/api/stripe', stripeRouter);
   app.use('/api/user', userRouter);
   app.use('/api/configs', configsRouter);
 

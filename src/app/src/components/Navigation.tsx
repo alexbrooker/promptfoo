@@ -1,9 +1,7 @@
 import React, { useState, forwardRef } from 'react';
 import type { LinkProps } from 'react-router-dom';
 import { Link, useLocation } from 'react-router-dom';
-import { IS_RUNNING_LOCALLY } from '@app/constants';
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
-import EngineeringIcon from '@mui/icons-material/Engineering';
 import InfoIcon from '@mui/icons-material/Info';
 import AppBar from '@mui/material/AppBar';
 import Box from '@mui/material/Box';
@@ -16,7 +14,6 @@ import Toolbar from '@mui/material/Toolbar';
 import Tooltip from '@mui/material/Tooltip';
 import { styled } from '@mui/material/styles';
 import { useUIStore } from '../stores/uiStore';
-import ApiSettingsModal from './ApiSettingsModal';
 import DarkMode from './DarkMode';
 import InfoModal from './InfoModal';
 import Logo from './Logo';
@@ -66,7 +63,24 @@ function NavLink({ href, label }: { href: string; label: string }) {
   );
 }
 
-function CreateDropdown() {
+// Simplified - Red team only
+function CreateButton() {
+  const location = useLocation();
+  const isActive = location.pathname.startsWith('/redteam/setup');
+
+  return (
+    <NavButton 
+      component={RouterLink} 
+      to="/redteam/setup" 
+      className={isActive ? 'active' : ''}
+    >
+      Create Security Test
+    </NavButton>
+  );
+}
+
+
+function ComplianceDropdown() {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
   const location = useLocation();
@@ -79,7 +93,7 @@ function CreateDropdown() {
     setAnchorEl(null);
   };
 
-  const isActive = ['/setup', '/redteam/setup'].some((route) =>
+  const isActive = ['/test-plans', '/redteam/reports'].some((route) =>
     location.pathname.startsWith(route),
   );
 
@@ -90,62 +104,14 @@ function CreateDropdown() {
         endIcon={<ArrowDropDownIcon />}
         className={isActive ? 'active' : ''}
       >
-        Create
-      </NavButton>
-      <Menu
-        anchorEl={anchorEl}
-        open={open}
-        onClose={handleClose}
-        PaperProps={{
-          elevation: 0,
-          sx: {
-            overflow: 'visible',
-            filter: 'drop-shadow(0px 2px 8px rgba(0,0,0,0.32))',
-            mt: 1.5,
-          },
-        }}
-      >
-        <MenuItem onClick={handleClose} component={RouterLink} to="/setup">
-          Eval
-        </MenuItem>
-        <MenuItem onClick={handleClose} component={RouterLink} to="/redteam/setup">
-          Red team
-        </MenuItem>
-      </Menu>
-    </>
-  );
-}
-
-function EvalsDropdown() {
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const open = Boolean(anchorEl);
-  const location = useLocation();
-
-  const handleClick = (event: React.MouseEvent<HTMLElement>) => {
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleClose = () => {
-    setAnchorEl(null);
-  };
-
-  const isActive = ['/eval', '/evals'].some((route) => location.pathname.startsWith(route));
-
-  return (
-    <>
-      <NavButton
-        onClick={handleClick}
-        endIcon={<ArrowDropDownIcon />}
-        className={isActive ? 'active' : ''}
-      >
-        Evals
+        Compliance
       </NavButton>
       <Menu anchorEl={anchorEl} open={open} onClose={handleClose}>
-        <MenuItem onClick={handleClose} component={RouterLink} to="/eval">
-          Latest Eval
+        <MenuItem onClick={handleClose} component={RouterLink} to="/test-plans">
+          Test Plans
         </MenuItem>
-        <MenuItem onClick={handleClose} component={RouterLink} to="/evals">
-          All Evals
+        <MenuItem onClick={handleClose} component={RouterLink} to="/redteam/reports">
+          Reports
         </MenuItem>
       </Menu>
     </>
@@ -160,11 +126,9 @@ export default function Navigation({
   onToggleDarkMode: () => void;
 }) {
   const [showInfoModal, setShowInfoModal] = useState<boolean>(false);
-  const [showApiSettingsModal, setShowApiSettingsModal] = useState<boolean>(false);
   const isNavbarVisible = useUIStore((state) => state.isNavbarVisible);
 
   const handleModalToggle = () => setShowInfoModal((prevState) => !prevState);
-  const handleApiSettingsModalToggle = () => setShowApiSettingsModal((prevState) => !prevState);
 
   if (!isNavbarVisible) {
     return null;
@@ -176,29 +140,20 @@ export default function Navigation({
         <NavToolbar>
           <NavSection>
             <Logo />
-            <CreateDropdown />
-            <EvalsDropdown />
-            <NavLink href="/prompts" label="Prompts" />
-            <NavLink href="/datasets" label="Datasets" />
-            <NavLink href="/history" label="History" />
+            <NavLink href="/home" label="Home" />
+            <CreateButton />
+            <ComplianceDropdown />
+            <NavLink href="/subscription" label="Subscription" />
           </NavSection>
           <NavSection>
             <IconButton onClick={handleModalToggle} color="inherit">
               <InfoIcon />
             </IconButton>
-            {IS_RUNNING_LOCALLY && (
-              <Tooltip title="API and Sharing Settings">
-                <IconButton onClick={handleApiSettingsModalToggle} color="inherit">
-                  <EngineeringIcon />
-                </IconButton>
-              </Tooltip>
-            )}
             <DarkMode onToggleDarkMode={onToggleDarkMode} />
           </NavSection>
         </NavToolbar>
       </StyledAppBar>
       <InfoModal open={showInfoModal} onClose={handleModalToggle} />
-      <ApiSettingsModal open={showApiSettingsModal} onClose={handleApiSettingsModalToggle} />
     </>
   );
 }

@@ -67,3 +67,60 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Define initial feature set
 - Create onboarding and signup process
 - Establish basic analytics tracking
+
+## Onboarding Flow Implementation
+
+🎯 Complete Onboarding Flow Implementation
+
+Key Features
+
+- 4-step onboarding process with progress indicator
+- Supabase integration for user profile management
+- Protected routing that ensures onboarding completion
+- Material-UI components for consistent design
+- Form validation and data persistence
+
+Onboarding Steps
+
+1. Personal Information - Name and company
+2. Chatbot Details - AI role, industry, and use case
+3. Compliance & Operations - Country and compliance requirements
+4. Terms & Conditions - Legal acceptance
+
+Files Created/Modified
+
+New Components:
+
+- /src/app/src/pages/onboarding/page.tsx - Main onboarding container
+- /src/app/src/pages/onboarding/components/PersonalInfoStep.tsx
+- /src/app/src/pages/onboarding/components/ChatbotDetailsStep.tsx
+- /src/app/src/pages/onboarding/components/ComplianceStep.tsx
+- /src/app/src/pages/onboarding/components/TermsStep.tsx
+- /src/app/src/hooks/useUserInitialization.tsx
+
+Enhanced Files:
+
+- userStore.ts - Added onboarding data management and Supabase integration
+- ProtectedRoute.tsx - Added onboarding completion check
+- App.tsx - Integrated onboarding route and user initialization
+- user_sql_setup.sql - Updated database schema
+
+Database Schema
+
+The profiles table includes:
+
+- Personal info (name, company)
+- AI details (chatbot_role, industry, use_case)
+- Compliance (compliance_needs[], country_of_operation)
+- Completion tracking (terms_accepted, onboarding_completed)
+
+User Flow
+
+1. User logs in → Automatic redirect to onboarding if not completed
+2. Progress through 4 steps with validation
+3. Data saved to Supabase on each step
+4. Terms acceptance required to complete
+5. Redirect to main app once onboarding finished
+
+The implementation ensures users complete onboarding before accessing the main application while providing a
+smooth, guided experience with proper data collection for compliance and personalization needs.

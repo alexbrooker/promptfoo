@@ -1,0 +1,213 @@
+{
+  "stripe_webhook_test_scenarios": {
+    "description": "Manual test scenarios for Stripe webhook implementation",
+    "test_customers": {
+      "basic_customer": {
+        "stripe_customer_id": "cus_test_basic123",
+        "user_id": "test-user-1",
+        "email": "basic@test.com",
+        "initial_tier": "free"
+      },
+      "pro_customer": {
+        "stripe_customer_id": "cus_test_pro456",
+        "user_id": "test-user-2", 
+        "email": "pro@test.com",
+        "initial_tier": "free"
+      },
+      "enterprise_customer": {
+        "stripe_customer_id": "cus_test_enterprise789",
+        "user_id": "test-user-3",
+        "email": "enterprise@test.com",
+        "initial_tier": "free"
+      }
+    },
+    "test_price_ids": {
+      "basic": "price_basic_test",
+      "pro": "price_pro_test", 
+      "enterprise": "price_enterprise_test",
+      "invalid": "price_invalid_unknown"
+    },
+    "scenarios": [
+      {
+        "id": "scenario_1",
+        "name": "Basic Subscription Creation",
+        "webhook_event": "customer.subscription.created",
+        "test_data": {
+          "customer": "cus_test_basic123",
+          "subscription_id": "sub_test_basic_001",
+          "price_id": "price_basic_test",
+          "status": "active"
+        },
+        "expected_results": {
+          "subscription_record": {
+            "user_id": "test-user-1",
+            "stripe_customer_id": "cus_test_basic123",
+            "plan_id": "basic",
+            "status": "active"
+          },
+          "profile_update": {
+            "subscription_tier": "basic"
+          }
+        }
+      },
+      {
+        "id": "scenario_2", 
+        "name": "Plan Upgrade (Pro to Enterprise)",
+        "webhook_event": "customer.subscription.updated",
+        "prerequisites": ["scenario_1"],
+        "test_data": {
+          "customer": "cus_test_pro456",
+          "subscription_id": "sub_test_pro_001",
+          "old_price_id": "price_pro_test",
+          "new_price_id": "price_enterprise_test",
+          "status": "active"
+        },
+        "expected_results": {
+          "subscription_record": {
+            "plan_id": "enterprise",
+            "status": "active"
+          },
+          "profile_update": {
+            "subscription_tier": "enterprise"
+          }
+        }
+      },
+      {
+        "id": "scenario_3",
+        "name": "Subscription Cancellation", 
+        "webhook_event": "customer.subscription.deleted",
+        "test_data": {
+          "customer": "cus_test_basic123",
+          "subscription_id": "sub_test_basic_001",
+          "status": "canceled"
+        },
+        "expected_results": {
+          "subscription_record": {
+            "status": "canceled"
+          },
+          "profile_update": {
+            "subscription_tier": "free"
+          }
+        }
+      },
+      {
+        "id": "scenario_4",
+        "name": "Successful Payment",
+        "webhook_event": "invoice.payment_succeeded",
+        "test_data": {
+          "customer": "cus_test_pro456",
+          "invoice_id": "in_test_success_001",
+          "amount_paid": 2900,
+          "currency": "usd"
+        },
+        "expected_results": {
+          "usage_log": {
+            "user_id": "test-user-2",
+            "action": "payment_succeeded",
+            "metadata": {
+              "invoice_id": "in_test_success_001",
+              "amount": 2900,
+              "currency": "usd"
+            }
+          }
+        }
+      },
+      {
+        "id": "scenario_5", 
+        "name": "Failed Payment",
+        "webhook_event": "invoice.payment_failed",
+        "test_data": {
+          "customer": "cus_test_pro456",
+          "invoice_id": "in_test_failed_001",
+          "amount_due": 2900,
+          "currency": "usd",
+          "failure_reason": "insufficient_funds"
+        },
+        "expected_results": {
+          "usage_log": {
+            "user_id": "test-user-2",
+            "action": "payment_failed",
+            "metadata": {
+              "invoice_id": "in_test_failed_001",
+              "amount": 2900,
+              "currency": "usd",
+              "failure_reason": "insufficient_funds"
+            }
+          }
+        }
+      }
+    ],
+    "edge_cases": [
+      {
+        "id": "edge_1",
+        "name": "Unknown Customer",
+        "webhook_event": "customer.subscription.created",
+        "test_data": {
+          "customer": "cus_unknown_customer",
+          "price_id": "price_basic_test"
+        },
+        "expected_results": {
+          "warning_logged": true,
+          "no_database_changes": true
+        }
+      },
+      {
+        "id": "edge_2",
+        "name": "Invalid Price ID",
+        "webhook_event": "customer.subscription.created", 
+        "test_data": {
+          "customer": "cus_test_basic123",
+          "price_id": "price_invalid_unknown"
+        },
+        "expected_results": {
+          "subscription_record": {
+            "plan_id": "unknown"
+          }
+        }
+      },
+      {
+        "id": "edge_3",
+        "name": "Duplicate Event",
+        "webhook_event": "customer.subscription.created",
+        "test_data": {
+          "customer": "cus_test_enterprise789", 
+          "subscription_id": "sub_duplicate_test",
+          "price_id": "price_pro_test"
+        },
+        "steps": [
+          "Send event once",
+          "Send identical event again immediately"
+        ],
+        "expected_results": {
+          "single_subscription_record": true,
+          "no_duplicates": true
+        }
+      },
+      {
+        "id": "edge_4",
+        "name": "Large Metadata",
+        "webhook_event": "invoice.payment_succeeded",
+        "test_data": {
+          "customer": "cus_test_basic123",
+          "amount_paid": 999999,
+          "description": "Very long description with lots of metadata that tests the limits of our JSON storage and processing capabilities in the webhook handler"
+        },
+        "expected_results": {
+          "usage_log_created": true,
+          "metadata_stored_correctly": true
+        }
+      }
+    ],
+    "verification_queries": {
+      "check_subscriptions": "SELECT * FROM subscriptions WHERE stripe_customer_id IN ('cus_test_basic123', 'cus_test_pro456', 'cus_test_enterprise789');",
+      "check_user_tiers": "SELECT id, email, subscription_tier FROM profiles WHERE id LIKE 'test-user-%';",
+      "check_payment_logs": "SELECT * FROM usage_logs WHERE action IN ('payment_succeeded', 'payment_failed') AND user_id LIKE 'test-user-%';",
+      "check_for_duplicates": "SELECT stripe_customer_id, COUNT(*) FROM subscriptions GROUP BY stripe_customer_id HAVING COUNT(*) > 1;"
+    },
+    "cleanup_queries": [
+      "DELETE FROM usage_logs WHERE user_id IN ('test-user-1', 'test-user-2', 'test-user-3');",
+      "DELETE FROM subscriptions WHERE stripe_customer_id IN ('cus_test_basic123', 'cus_test_pro456', 'cus_test_enterprise789');",
+      "DELETE FROM profiles WHERE id IN ('test-user-1', 'test-user-2', 'test-user-3');"
+    ]
+  }
+}

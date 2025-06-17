@@ -1,22 +1,19 @@
-import React, { useState, useEffect, type ReactNode } from 'react';
-import { fetchUserEmail } from '@app/utils/api';
+import React, { type ReactNode } from 'react';
+import { useUserStore } from '@app/stores/userStore';
 import { UserContext } from './UserContextDef';
 
 export function UserProvider({ children }: { children: ReactNode }) {
-  const [email, setEmail] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    const loadUserEmail = async () => {
-      const userEmail = await fetchUserEmail();
-      setEmail(userEmail);
-      setIsLoading(false);
-    };
-
-    loadUserEmail();
-  }, []);
+  const { user, isLoading } = useUserStore();
 
   return (
-    <UserContext.Provider value={{ email, setEmail, isLoading }}>{children}</UserContext.Provider>
+    <UserContext.Provider
+      value={{
+        email: user?.email || null,
+        setEmail: () => {}, // This is now handled by Supabase auth
+        isLoading,
+      }}
+    >
+      {children}
+    </UserContext.Provider>
   );
 }

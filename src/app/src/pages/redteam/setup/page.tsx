@@ -6,6 +6,7 @@ import { useTelemetry } from '@app/hooks/useTelemetry';
 import { useToast } from '@app/hooks/useToast';
 import { callApi } from '@app/utils/api';
 import AppIcon from '@mui/icons-material/Apps';
+import TemplateIcon from '@mui/icons-material/Assignment';
 import DownloadIcon from '@mui/icons-material/Download';
 import PluginIcon from '@mui/icons-material/Extension';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
@@ -37,6 +38,8 @@ import Review from './components/Review';
 import Setup from './components/Setup';
 import Strategies from './components/Strategies';
 import Targets from './components/Targets';
+import TemplateSelector from './components/TemplateSelector';
+import TemplateSelection from './components/TemplateSelection';
 import { predefinedTargets, customTargetOption } from './components/constants';
 import { DEFAULT_HTTP_TARGET, useRedTeamConfig } from './hooks/useRedTeamConfig';
 import { useSetupState } from './hooks/useSetupState';
@@ -269,6 +272,7 @@ export default function RedTeamSetupPage() {
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [loadDialogOpen, setLoadDialogOpen] = useState(false);
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [savedConfigs, setSavedConfigs] = useState<SavedConfig[]>([]);
   const [configName, setConfigName] = useState('');
   const toast = useToast();
@@ -295,6 +299,41 @@ export default function RedTeamSetupPage() {
       setValue(0);
     }
   }, [location.hash]);
+
+  // Auto-load template or config from URL parameter
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const templateParam = searchParams.get('template') as 'quick' | 'business' | null;
+    const configParam = searchParams.get('config');
+
+    if (templateParam && (templateParam === 'quick' || templateParam === 'business')) {
+      const loadTemplateFromParam = async () => {
+        try {
+          const { loadTemplate, templateInfo } = await import('./utils/templateLoader');
+          const templateConfig = await loadTemplate(templateParam);
+          const info = templateInfo[templateParam];
+          handleTemplateSelected(templateConfig, `${info.name} Template`);
+          toast.showToast(`${info.name} template loaded automatically`, 'success');
+        } catch (error) {
+          console.error('Failed to auto-load template:', error);
+          toast.showToast('Failed to auto-load template. Please select manually.', 'warning');
+        }
+      };
+
+      loadTemplateFromParam();
+    } else if (configParam) {
+      const loadConfigFromParam = async () => {
+        try {
+          await handleLoadConfig(configParam);
+        } catch (error) {
+          console.error('Failed to auto-load config:', error);
+          toast.showToast('Failed to auto-load test plan. Please select manually.', 'warning');
+        }
+      };
+
+      loadConfigFromParam();
+    }
+  }, [location.search]);
 
   const updateHash = (newValue: number) => {
     if (location.hash !== `#${newValue}`) {
@@ -521,6 +560,14 @@ export default function RedTeamSetupPage() {
     toast.showToast('Configuration reset to defaults', 'success');
   };
 
+  const handleTemplateSelected = (templateConfig: Config, templateName: string) => {
+    setFullConfig(templateConfig);
+    setConfigName(templateName);
+    lastSavedConfig.current = JSON.stringify(templateConfig);
+    setHasUnsavedChanges(false);
+    setConfigDate(new Date().toISOString());
+  };
+
   const handleDownloadYaml = () => {
     const yamlContent = generateOrderedYaml(config);
     const blob = new Blob([yamlContent], { type: 'text/yaml' });
@@ -582,7 +629,7 @@ export default function RedTeamSetupPage() {
                 <StyledTab
                   icon={<AppIcon />}
                   iconPosition="start"
-                  label="Usage Details"
+                  label="Template Selection"
                   {...a11yProps(0)}
                 />
                 <StyledTab
@@ -615,6 +662,14 @@ export default function RedTeamSetupPage() {
               <SidebarButton
                 variant="text"
                 fullWidth
+                startIcon={<TemplateIcon />}
+                onClick={() => setTemplateDialogOpen(true)}
+              >
+                Load Template
+              </SidebarButton>
+              <SidebarButton
+                variant="text"
+                fullWidth
                 startIcon={<SaveIcon />}
                 onClick={() => setSaveDialogOpen(true)}
               >
@@ -644,8 +699,8 @@ export default function RedTeamSetupPage() {
         </OuterSidebarContainer>
         <TabContent>
           <CustomTabPanel value={value} index={0}>
-            <ErrorBoundary name="Application Purpose Page">
-              <Purpose onNext={handleNext} />
+            <ErrorBoundary name="Template Selection Page">
+              <TemplateSelection onTemplateSelected={handleTemplateSelected} onNext={handleNext} />
             </ErrorBoundary>
           </CustomTabPanel>
           <CustomTabPanel value={value} index={1}>
@@ -801,6 +856,12 @@ export default function RedTeamSetupPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <TemplateSelector
+        open={templateDialogOpen}
+        onClose={() => setTemplateDialogOpen(false)}
+        onTemplateSelected={handleTemplateSelected}
+      />
     </Root>
   );
 }

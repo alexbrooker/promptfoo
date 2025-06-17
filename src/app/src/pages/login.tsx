@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useUserStore } from '@app/stores/userStore';
-import { callApi } from '@app/utils/api';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import CircularProgress from '@mui/material/CircularProgress';
@@ -11,14 +10,11 @@ import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 
 export default function LoginPage() {
-  const [emailInput, setEmailInput] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const navigate = useNavigate();
   const location = useLocation();
-  const { email, isLoading, setEmail, fetchEmail } = useUserStore();
-
-  useEffect(() => {
-    fetchEmail();
-  }, [fetchEmail]);
+  const { user, isLoading, signIn } = useUserStore();
 
   const params = new URLSearchParams(location.search);
   const handleRedirect = () => {
@@ -31,44 +27,19 @@ export default function LoginPage() {
   };
 
   useEffect(() => {
-    if (!isLoading && email) {
+    if (!isLoading && user) {
       handleRedirect();
     }
-  }, [isLoading, email]);
+  }, [isLoading, user]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const response = await callApi('/user/email', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email: emailInput }),
-      });
-
-      if (response.ok) {
-        // Save consent after successful login
-        await callApi('/user/consent', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            email: emailInput,
-            metadata: {
-              source: 'web_login',
-            },
-          }),
-        });
-
-        setEmail(emailInput);
-        handleRedirect();
-      } else {
-        console.error('Failed to set email');
-      }
+      await signIn(email, password);
+      handleRedirect();
     } catch (error) {
-      console.error('Error setting email:', error);
+      console.error('Login error:', error);
+      // Handle error (show message to user)
     }
   };
 
@@ -82,20 +53,10 @@ export default function LoginPage() {
 
   return (
     <Container maxWidth="sm">
-      <Box
-        sx={{
-          marginTop: 8,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-        }}
-      >
+      <Box sx={{ marginTop: 8, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         <Paper elevation={3} sx={{ padding: 4, width: '100%' }}>
           <Typography component="h1" variant="h4" align="center" gutterBottom>
-            {params.get('type') === 'report' ? 'View Report' : 'Authentication required'}
-          </Typography>
-          <Typography variant="body1" align="center" sx={{ mb: 3 }}>
-            Please verify your email to continue
+            Login
           </Typography>
           <Box component="form" onSubmit={handleSubmit}>
             <TextField
@@ -107,8 +68,20 @@ export default function LoginPage() {
               name="email"
               autoComplete="email"
               autoFocus
-              value={emailInput}
-              onChange={(e) => setEmailInput(e.target.value)}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+            <TextField
+              margin="normal"
+              required
+              fullWidth
+              name="password"
+              label="Password"
+              type="password"
+              id="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
             />
             <Button type="submit" fullWidth variant="contained" size="large" sx={{ mt: 3, mb: 2 }}>
               Login

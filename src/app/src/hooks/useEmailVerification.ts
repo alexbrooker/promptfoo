@@ -1,93 +1,50 @@
-import { useState, useCallback } from 'react';
-import { callApi } from '@app/utils/api';
-
-interface EmailStatus {
-  hasEmail: boolean;
-  email?: string;
-  status: 'ok' | 'exceeded_limit' | 'show_usage_warning' | 'no_email';
-  message?: string;
-}
+import { useCallback } from 'react';
+import { useUserStore } from '@app/stores/userStore';
 
 interface EmailVerificationResult {
   canProceed: boolean;
   needsEmail: boolean;
-  status: EmailStatus | null;
+  status: {
+    hasEmail: boolean;
+    email?: string;
+    status: 'no_email' | 'ok';
+    message?: string;
+  };
   error: string | null;
 }
 
 export function useEmailVerification() {
-  const [isChecking, setIsChecking] = useState(false);
-
+  const { user } = useUserStore();
   const checkEmailStatus = useCallback(async (): Promise<EmailVerificationResult> => {
-    setIsChecking(true);
-    try {
-      const response = await callApi('/user/email/status');
-      const status: EmailStatus = await response.json();
-
-      if (!status.hasEmail) {
-        return {
-          canProceed: false,
-          needsEmail: true,
-          status,
-          error: null,
-        };
-      }
-
-      if (status.status === 'exceeded_limit') {
-        return {
-          canProceed: false,
-          needsEmail: false,
-          status,
-          error:
-            'You have exceeded the maximum cloud inference limit. Please contact inquiries@promptfoo.dev to upgrade your account.',
-        };
-      }
-
-      return {
-        canProceed: true,
-        needsEmail: false,
-        status,
-        error: null,
-      };
-    } catch (error) {
-      console.error('Error checking email status:', error);
+    if (!user?.email) {
       return {
         canProceed: false,
-        needsEmail: false,
-        status: null,
-        error: 'Failed to check email verification status. Please try again.',
-      };
-    } finally {
-      setIsChecking(false);
-    }
-  }, []);
-
-  const saveEmail = useCallback(async (email: string): Promise<{ error?: string }> => {
-    try {
-      // First set the email
-      const emailResponse = await callApi('/user/email', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+        needsEmail: true,
+        status: {
+          hasEmail: false,
+          status: 'no_email',
+          message: 'Email verification required',
         },
-        body: JSON.stringify({ email }),
-      });
-
-      if (!emailResponse.ok) {
-        const errorData = await emailResponse.json();
-        return { error: errorData.error || 'Failed to set email' };
-      }
-
-      return {};
-    } catch (error) {
-      console.error('Error setting email:', error);
-      return { error: `Failed to set email: ${error}` };
+        error: null,
+      };
     }
+
+    return {
+      canProceed: true,
+      needsEmail: false,
+      status: {
+        hasEmail: true,
+        email: user.email,
+        status: 'ok',
+      },
+      error: null,
+    };
+  }, [user]);
+
+  // Email updates should be handled through Supabase auth flow
+  const saveEmail = useCallback(async (email: string): Promise<{ error?: string }> => {
+    return { error: 'Email updates should be handled through account settings' };
   }, []);
 
-  return {
-    checkEmailStatus,
-    saveEmail,
-    isChecking,
-  };
+  return { checkEmailStatus, saveEmail };
 }

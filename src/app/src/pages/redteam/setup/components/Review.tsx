@@ -39,6 +39,7 @@ import { useRedTeamConfig } from '../hooks/useRedTeamConfig';
 import { generateOrderedYaml } from '../utils/yamlHelpers';
 import { EmailVerificationDialog } from './EmailVerificationDialog';
 import { LogViewer } from './LogViewer';
+import PricingCard from './PricingCard';
 
 interface PolicyPlugin {
   id: 'policy';
@@ -592,77 +593,81 @@ export default function Review() {
       <Divider sx={{ my: 4 }} />
 
       <Typography variant="h5" gutterBottom sx={{ mb: 3 }}>
-        Running Your Configuration
+        Choose Your Security Assessment
       </Typography>
 
-      <Paper elevation={2} sx={{ p: 3 }}>
-        <Box sx={{ mb: 4 }}>
-          <Typography variant="h6" gutterBottom>
-            Option 1: Save and Run via CLI
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        <Grid item xs={12} md={6}>
+          <PricingCard 
+            tier="quick" 
+            configName={config.description || 'My Security Test Plan'}
+            onFreeRun={handleRunWithSettings}
+            isRunning={isRunning}
+          />
+        </Grid>
+        <Grid item xs={12} md={6}>
+          <PricingCard 
+            tier="business" 
+            configName={config.description || 'My Security Test Plan'}
+            onFreeRun={handleRunWithSettings}
+            isRunning={isRunning}
+          />
+        </Grid>
+      </Grid>
+
+      <Divider sx={{ my: 4 }} />
+
+      <Typography variant="h6" gutterBottom>
+        Advanced Options
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+        For developers and advanced users who want to run tests via command line
+      </Typography>
+
+      <Paper elevation={1} sx={{ p: 3 }}>
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="subtitle1" gutterBottom>
+            Export Configuration
           </Typography>
-          <Typography variant="body1">
-            Save your configuration and run it from the command line. Full control over the
-            evaluation process, good for larger scans:
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Save your test plan configuration for CLI usage or sharing
           </Typography>
-          <Box
-            component="pre"
-            sx={{
-              p: 2,
-              mb: 2,
-              backgroundColor: theme.palette.mode === 'dark' ? '#1e1e1e' : '#f5f5f5',
-              borderRadius: 1,
-              fontFamily: 'monospace',
-              fontSize: '0.875rem',
-            }}
-          >
-            promptfoo redteam run
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <Button
+              variant="outlined"
+              onClick={handleSaveYaml}
+              startIcon={<SaveIcon />}
+            >
+              Save YAML
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<VisibilityIcon />}
+              onClick={handleOpenYamlDialog}
+            >
+              View YAML
+            </Button>
           </Box>
-          <Stack spacing={2}>
-            <Box>
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={handleSaveYaml}
-                startIcon={<SaveIcon />}
-              >
-                Save YAML
-              </Button>
-              <Button
-                variant="outlined"
-                color="primary"
-                startIcon={<VisibilityIcon />}
-                onClick={handleOpenYamlDialog}
-                sx={{ ml: 2 }}
-              >
-                View YAML
-              </Button>
-            </Box>
-          </Stack>
         </Box>
 
-        <Divider sx={{ my: 3 }} />
-
         <Box>
-          <Typography variant="h6" gutterBottom>
-            Option 2: Run Directly in Browser
+          <Typography variant="subtitle1" gutterBottom>
+            Free Preview Test
           </Typography>
-          <Typography variant="body1" paragraph>
-            Run the red team evaluation right here. Simpler but less powerful than the CLI, good for
-            tests and small scans:
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Run a limited test to preview the security assessment process
           </Typography>
-          <Box sx={{ mb: 2 }}>
-            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={handleRunWithSettings}
-                disabled={isRunning}
-                startIcon={
-                  isRunning ? <CircularProgress size={20} color="inherit" /> : <PlayArrowIcon />
-                }
-              >
-                {isRunning ? 'Running...' : 'Run Now'}
-              </Button>
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+            <Button
+              variant="outlined"
+              onClick={handleRunWithSettings}
+              disabled={isRunning}
+              startIcon={
+                isRunning ? <CircularProgress size={20} color="inherit" /> : <PlayArrowIcon />
+              }
+            >
+              {isRunning ? 'Running Preview...' : 'Run Free Preview'}
+            </Button>
               {isRunning && (
                 <Button
                   variant="contained"
@@ -705,7 +710,6 @@ export default function Review() {
             </Box>
           </Box>
           {logs.length > 0 && <LogViewer logs={logs} />}
-        </Box>
       </Paper>
 
       <Dialog open={isYamlDialogOpen} onClose={handleCloseYamlDialog} maxWidth="lg" fullWidth>

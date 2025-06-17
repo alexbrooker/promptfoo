@@ -1,3 +1,4 @@
+import { supabase } from '@app/lib/supabase';
 import useApiConfig from '@app/stores/apiConfig';
 
 export async function callApi(path: string, options: RequestInit = {}): Promise<Response> {
@@ -5,18 +6,40 @@ export async function callApi(path: string, options: RequestInit = {}): Promise<
   return fetch(`${apiBaseUrl}/api${path}`, options);
 }
 
+export async function callAuthenticatedApi(
+  path: string,
+  options: RequestInit = {},
+): Promise<Response> {
+  const { apiBaseUrl } = useApiConfig.getState();
+
+  // Get the current session token
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const token = session?.access_token;
+
+  if (!token) {
+    throw new Error('User not authenticated');
+  }
+
+  const headers = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${token}`,
+    ...options.headers,
+  };
+
+  return fetch(`${apiBaseUrl}/api${path}`, {
+    ...options,
+    headers,
+  });
+}
+
 export async function fetchUserEmail(): Promise<string | null> {
   try {
-    const response = await callApi('/user/email', {
-      method: 'GET',
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to fetch user email');
-    }
-
-    const data = await response.json();
-    return data.email;
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    return user?.email || null;
   } catch (error) {
     console.error('Error fetching user email:', error);
     return null;

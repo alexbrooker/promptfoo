@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { getDb } from '../../database';
 import { configsTable } from '../../database/tables';
 import logger from '../../logger';
+import { templates, type TemplateTier } from '../templates/redteamTemplates';
 
 export const configsRouter = Router();
 
@@ -88,6 +89,34 @@ configsRouter.get('/:type', async (req: Request, res: Response): Promise<void> =
   }
 });
 
+// Get redteam template by tier
+configsRouter.get('/templates/:tier', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const tier = req.params.tier as TemplateTier;
+
+    if (!templates[tier]) {
+      res.status(404).json({ error: `Template not found for tier: ${tier}` });
+      return;
+    }
+
+    const template = templates[tier];
+    logger.info(`Loaded redteam template for tier: ${tier}`);
+
+    // Return in same format as regular config load
+    res.json({
+      id: `template-${tier}`,
+      name: `${tier === 'quick' ? 'Quick Check' : 'Business Scan'} Template`,
+      type: 'redteam',
+      config: template,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+  } catch (error) {
+    logger.error(`Error fetching template: ${error}`);
+    res.status(500).json({ error: 'Failed to fetch template' });
+  }
+});
+
 configsRouter.get('/:type/:id', async (req: Request, res: Response): Promise<void> => {
   const db = await getDb();
   try {
@@ -108,5 +137,26 @@ configsRouter.get('/:type/:id', async (req: Request, res: Response): Promise<voi
   } catch (error) {
     logger.error(`Error fetching config: ${error}`);
     res.status(500).json({ error: 'Failed to fetch config' });
+  }
+});
+
+configsRouter.delete('/:type/:id', async (req: Request, res: Response): Promise<void> => {
+  const db = await getDb();
+  try {
+    const result = await db
+      .delete(configsTable)
+      .where(and(eq(configsTable.type, req.params.type), eq(configsTable.id, req.params.id)))
+      .returning({ id: configsTable.id });
+
+    if (result.length === 0) {
+      res.status(404).json({ error: 'Config not found' });
+      return;
+    }
+
+    logger.info(`Deleted config ${req.params.id} of type ${req.params.type}`);
+    res.json({ success: true, id: result[0].id });
+  } catch (error) {
+    logger.error(`Error deleting config: ${error}`);
+    res.status(500).json({ error: 'Failed to delete config' });
   }
 });
