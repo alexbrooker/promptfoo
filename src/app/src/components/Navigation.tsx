@@ -144,6 +144,7 @@ export default function Navigation({
             <CreateButton />
             <ComplianceDropdown />
             <NavLink href="/subscription" label="Subscription" />
+            <NavLink href="/model-audit" label="Model Audit" />
           </NavSection>
           <NavSection>
             <IconButton onClick={handleModalToggle} color="inherit">
