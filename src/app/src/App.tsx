@@ -23,6 +23,7 @@ import LauncherPage from './pages/launcher/page';
 import LoginPage from './pages/login';
 import ModelAuditPage from './pages/model-audit/page';
 import OnboardingPage from './pages/onboarding/page';
+import GuestOnboardingPage from './pages/guest-onboarding/page';
 import PromptsPage from './pages/prompts/page';
 import ReportPage from './pages/redteam/report/page';
 import RedteamReportsPage from './pages/redteam/reports/page';
@@ -81,6 +82,7 @@ const router = createBrowserRouter(
           <Route path="/report" element={<ReportPage />} />
           <Route path="/setup" element={<EvalCreatorPage />} />
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/get-started" element={<GuestOnboardingPage />} />
           <Route
             element={
               <ProtectedRoute>

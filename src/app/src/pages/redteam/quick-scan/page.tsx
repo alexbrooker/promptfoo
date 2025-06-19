@@ -20,6 +20,7 @@ import { customizeQuickScanConfig, QUICK_SCAN_RUN_SETTINGS } from '@app/utils/qu
 import { useUserStore } from '@app/stores/userStore';
 import Targets from '../setup/components/Targets';
 import QuickScanReview from './components/QuickScanReview';
+import ProfileSettings from './components/ProfileSettings';
 import type { Config } from '../setup/types';
 
 const Root = styled(Box)(({ theme }) => ({
@@ -63,6 +64,7 @@ export default function QuickScanPage() {
   const { onboardingData } = useUserStore();
   const [activeStep, setActiveStep] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [currentProfile, setCurrentProfile] = useState(onboardingData);
   const hasInitialized = useRef(false);
 
   // Auto-load the quick template on component mount
@@ -134,6 +136,11 @@ export default function QuickScanPage() {
     recordEvent('webui_page_view', { page: 'quick_scan_setup' });
   }, []); // Only run once on mount
 
+  // Update currentProfile when onboardingData changes
+  useEffect(() => {
+    setCurrentProfile(onboardingData);
+  }, [onboardingData]);
+
   const handleNext = () => {
     if (activeStep < steps.length - 1) {
       setActiveStep((prevStep) => prevStep + 1);
@@ -150,6 +157,51 @@ export default function QuickScanPage() {
 
   const handleCancel = () => {
     navigate('/home');
+  };
+
+  const handleProfileUpdate = async (updatedProfile: any) => {
+    setCurrentProfile(updatedProfile);
+    
+    try {
+      // Re-customize the config with updated profile data
+      let baseConfig: Config;
+      
+      try {
+        baseConfig = await loadTemplate('quick');
+      } catch (templateError) {
+        console.warn('Server template not available, using fallback:', templateError);
+        baseConfig = {
+          description: 'Quick Security Scan',
+          prompts: ['{{prompt}}'],
+          target: DEFAULT_HTTP_TARGET,
+          plugins: ['prompt-extraction', 'pii:direct', 'harmful:hate', 'excessive-agency', 'hallucination'],
+          strategies: ['jailbreak', 'prompt-injection', 'jailbreak:composite'],
+          purpose: 'Quick AI security assessment',
+          entities: [],
+          numTests: 10,
+          applicationDefinition: {
+            purpose: 'Quick AI security assessment',
+            redteamUser: '',
+            accessToData: '',
+            forbiddenData: '',
+            accessToActions: '',
+            forbiddenActions: '',
+            connectedSystems: '',
+          },
+        };
+      }
+      
+      const customizedConfig = customizeQuickScanConfig(baseConfig, updatedProfile);
+      setFullConfig(customizedConfig);
+      
+      toast.showToast(
+        `Quick scan updated for ${updatedProfile.industry || 'your use case'}`, 
+        'success'
+      );
+    } catch (error) {
+      console.error('Failed to update quick scan config:', error);
+      toast.showToast('Failed to update quick scan configuration.', 'error');
+    }
   };
 
   if (isLoading) {
@@ -197,14 +249,17 @@ export default function QuickScanPage() {
           </Typography>
           <Typography variant="body1" color="text.secondary">
             Perform a rapid AI security assessment with pre-configured settings optimized for{' '}
-            {onboardingData.industry || 'your use case'}. Just configure your target and start testing.
+            {currentProfile.industry || 'your use case'}. Just configure your target and start testing.
           </Typography>
-          {onboardingData.complianceNeeds?.length > 0 && (
+          {currentProfile.complianceNeeds?.length > 0 && currentProfile.complianceNeeds[0] !== 'None' && (
             <Typography variant="body2" color="text.secondary" sx={{ mt: 1, fontStyle: 'italic' }}>
-              Includes compliance checks for: {onboardingData.complianceNeeds.join(', ')}
+              Includes compliance checks for: {currentProfile.complianceNeeds.filter(c => c !== 'None').join(', ')}
             </Typography>
           )}
         </Box>
+
+        {/* Profile Settings */}
+        <ProfileSettings onProfileUpdate={handleProfileUpdate} />
 
         {/* Stepper */}
         <Stepper activeStep={activeStep} alternativeLabel sx={{ mb: 4 }}>

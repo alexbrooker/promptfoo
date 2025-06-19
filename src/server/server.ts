@@ -274,7 +274,13 @@ export async function startServer(
     const results = await latestEval?.getResultsCount();
 
     if (results && results > 0) {
-      logger.info(`Emitting update with eval ID: ${latestEval?.config?.description || 'unknown'}`);
+      const jobId = latestEval?.config?.metadata?.jobId;
+      const description = latestEval?.config?.description || 'unknown';
+      const logMessage = jobId 
+        ? `Emitting update for job ${jobId} with eval ID: ${description}`
+        : `Emitting update with eval ID: ${description}`;
+      
+      logger.info(logMessage);
       io.emit('update', latestEval);
       allPrompts = null;
     }

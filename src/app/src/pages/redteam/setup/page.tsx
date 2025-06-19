@@ -290,7 +290,7 @@ export default function RedTeamSetupPage() {
     const hash = location.hash.replace('#', '');
     if (hash) {
       const newValue = Number.parseInt(hash, 10);
-      if (!Number.isNaN(newValue) && newValue >= 0 && newValue <= 4) {
+      if (!Number.isNaN(newValue) && newValue >= 0 && newValue <= 3) {
         setValue(newValue);
       } else {
         setValue(0);
@@ -626,34 +626,28 @@ export default function RedTeamSetupPage() {
                 onChange={handleChange}
               >
                 <StyledTab
-                  icon={<AppIcon />}
-                  iconPosition="start"
-                  label="Template Selection"
-                  {...a11yProps(0)}
-                />
-                <StyledTab
                   icon={<TargetIcon />}
                   iconPosition="start"
                   label="Targets"
-                  {...a11yProps(1)}
+                  {...a11yProps(0)}
                 />
                 <StyledTab
                   icon={<PluginIcon />}
                   iconPosition="start"
                   label={`Plugins${config.plugins?.length ? ` (${config.plugins.length})` : ''}`}
-                  {...a11yProps(2)}
+                  {...a11yProps(1)}
                 />
                 <StyledTab
                   icon={<StrategyIcon />}
                   iconPosition="start"
                   label={`Strategies${config.strategies?.length ? ` (${config.strategies.length})` : ''}`}
-                  {...a11yProps(3)}
+                  {...a11yProps(2)}
                 />
                 <StyledTab
                   icon={<ReviewIcon />}
                   iconPosition="start"
                   label="Review"
-                  {...a11yProps(4)}
+                  {...a11yProps(3)}
                 />
               </StyledTabs>
             </TabsContainer>
@@ -698,26 +692,21 @@ export default function RedTeamSetupPage() {
         </OuterSidebarContainer>
         <TabContent>
           <CustomTabPanel value={value} index={0}>
-            <ErrorBoundary name="Template Selection Page">
-              <TemplateSelection onTemplateSelected={handleTemplateSelected} onNext={handleNext} />
-            </ErrorBoundary>
-          </CustomTabPanel>
-          <CustomTabPanel value={value} index={1}>
             <ErrorBoundary name="Targets Page">
               <Targets onNext={handleNext} onBack={handleBack} setupModalOpen={setupModalOpen} />
             </ErrorBoundary>
           </CustomTabPanel>
-          <CustomTabPanel value={value} index={2}>
+          <CustomTabPanel value={value} index={1}>
             <ErrorBoundary name="Plugins Page">
               <Plugins onNext={handleNext} onBack={handleBack} />
             </ErrorBoundary>
           </CustomTabPanel>
-          <CustomTabPanel value={value} index={3}>
+          <CustomTabPanel value={value} index={2}>
             <ErrorBoundary name="Strategies Page">
               <Strategies onNext={handleNext} onBack={handleBack} />
             </ErrorBoundary>
           </CustomTabPanel>
-          <CustomTabPanel value={value} index={4}>
+          <CustomTabPanel value={value} index={3}>
             <ErrorBoundary name="Review Page">
               <Review />
             </ErrorBoundary>

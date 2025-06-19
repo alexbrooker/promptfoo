@@ -119,8 +119,17 @@ class UserJobManager {
   }
 
   private async executeJob(job: QueuedJob): Promise<void> {
+    // Add job ID to config metadata for logging and tracking
+    const configWithJobId = {
+      ...job.config,
+      metadata: {
+        ...job.config.metadata,
+        jobId: job.id
+      }
+    };
+
     const evalResult = await doRedteamRun({
-      liveRedteamConfig: job.config,
+      liveRedteamConfig: configWithJobId,
       force: false,
       verbose: false,
       delay: 0,
