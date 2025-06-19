@@ -2,7 +2,7 @@ import { supabase } from '@app/lib/supabase';
 import type { User } from '@supabase/supabase-js';
 import { create } from 'zustand';
 
-interface OnboardingData {
+export interface OnboardingData {
   name?: string;
   company?: string;
   chatbotRole?: string;
@@ -12,6 +12,8 @@ interface OnboardingData {
   countryOfOperation?: string;
   termsAccepted?: boolean;
   onboardingCompleted?: boolean;
+  scanCredits?: number;
+  creditsUsed?: number;
 }
 
 interface UserState {
@@ -24,6 +26,8 @@ interface UserState {
   updateOnboardingData: (data: Partial<OnboardingData>) => void;
   saveOnboardingToProfile: () => Promise<void>;
   fetchOnboardingData: () => Promise<void>;
+  consumeScanCredit: () => Promise<void>;
+  refundScanCredit: () => Promise<void>;
 }
 
 export const useUserStore = create<UserState>((set, get) => ({
@@ -79,6 +83,8 @@ export const useUserStore = create<UserState>((set, get) => ({
       country_of_operation: onboardingData.countryOfOperation,
       terms_accepted: onboardingData.termsAccepted,
       onboarding_completed: onboardingData.onboardingCompleted,
+      scan_credits: onboardingData.scanCredits,
+      credits_used: onboardingData.creditsUsed,
       updated_at: new Date().toISOString(),
     };
 
@@ -113,10 +119,82 @@ export const useUserStore = create<UserState>((set, get) => ({
         countryOfOperation: data.country_of_operation,
         termsAccepted: data.terms_accepted,
         onboardingCompleted: data.onboarding_completed,
+        scanCredits: data.scan_credits || 0,
+        creditsUsed: data.credits_used || 0,
       };
 
       console.log('Fetched onboarding data:', newOnboardingData);
       set({ onboardingData: newOnboardingData });
     }
+  },
+  consumeScanCredit: async () => {
+    const { user, onboardingData } = get();
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
+
+    const currentCredits = onboardingData.scanCredits || 0;
+    const currentUsed = onboardingData.creditsUsed || 0;
+
+    if (currentCredits <= 0) {
+      throw new Error('No scan credits available');
+    }
+
+    const updatedData = {
+      scanCredits: currentCredits - 1,
+      creditsUsed: currentUsed + 1,
+    };
+
+    // Update database
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        scan_credits: updatedData.scanCredits,
+        credits_used: updatedData.creditsUsed,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', user.id);
+
+    if (error) {
+      throw error;
+    }
+
+    // Update local state
+    set((state) => ({
+      onboardingData: { ...state.onboardingData, ...updatedData },
+    }));
+  },
+  refundScanCredit: async () => {
+    const { user, onboardingData } = get();
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
+
+    const currentCredits = onboardingData.scanCredits || 0;
+    const currentUsed = onboardingData.creditsUsed || 0;
+
+    const updatedData = {
+      scanCredits: currentCredits + 1,
+      creditsUsed: Math.max(0, currentUsed - 1),
+    };
+
+    // Update database
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        scan_credits: updatedData.scanCredits,
+        credits_used: updatedData.creditsUsed,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', user.id);
+
+    if (error) {
+      throw error;
+    }
+
+    // Update local state
+    set((state) => ({
+      onboardingData: { ...state.onboardingData, ...updatedData },
+    }));
   },
 }));

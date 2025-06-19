@@ -107,7 +107,7 @@ stripeRouter.post(
         cancel_url: cancelUrl,
         metadata: {
           userId: req.user.id,
-          planId: planId,
+          planId,
         },
       });
 
@@ -297,8 +297,10 @@ stripeRouter.get(
         .filter((charge) => {
           const hasInvoice = (charge as any).invoice != null; // This checks for both null AND undefined
           const isOneTimePayment = !hasInvoice && charge.status === 'succeeded';
-          
-          logger.info(`Charge ${charge.id}: invoice=${JSON.stringify((charge as any).invoice)}, hasInvoice=${hasInvoice}, isOneTime=${isOneTimePayment}, amount=${charge.amount}, status=${charge.status}`);
+
+          logger.info(
+            `Charge ${charge.id}: invoice=${JSON.stringify((charge as any).invoice)}, hasInvoice=${hasInvoice}, isOneTime=${isOneTimePayment}, amount=${charge.amount}, status=${charge.status}`,
+          );
           return isOneTimePayment;
         })
         .map((charge) => ({
@@ -310,7 +312,9 @@ stripeRouter.get(
           downloadUrl: charge.receipt_url || '',
         }));
 
-      logger.info(`Returning ${oneOffPayments.length} one-off payments for customer ${customer.id}`);
+      logger.info(
+        `Returning ${oneOffPayments.length} one-off payments for customer ${customer.id}`,
+      );
       res.json(oneOffPayments);
     } catch (error) {
       logger.error(`Error fetching one-off payments: ${error}`);

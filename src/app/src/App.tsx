@@ -27,8 +27,10 @@ import PromptsPage from './pages/prompts/page';
 import ReportPage from './pages/redteam/report/page';
 import RedteamReportsPage from './pages/redteam/reports/page';
 import RedteamSetupPage from './pages/redteam/setup/page';
+import QuickScanPage from './pages/redteam/quick-scan/page';
 import SubscriptionPage from './pages/subscription/page';
 import SubscriptionSuccessPage from './pages/subscription/success';
+import SettingsPage from './pages/settings/page';
 import TestPlansPage from './pages/test-plans/page';
 import LandingPage from './pages/landing/page';
 
@@ -57,7 +59,7 @@ const router = createBrowserRouter(
             index
             element={
               <Navigate
-                to={import.meta.env.VITE_PROMPTFOO_LAUNCHER ? '/launcher' : '/eval'}
+                to={import.meta.env.VITE_PROMPTFOO_LAUNCHER ? '/launcher' : '/home'}
                 replace
               />
             }
@@ -75,6 +77,7 @@ const router = createBrowserRouter(
           <Route path="/model-audit" element={<ModelAuditPage />} />
           <Route path="/redteam" element={<Navigate to="/redteam/setup" replace />} />
           <Route path="/redteam/setup" element={<RedteamSetupPage />} />
+          <Route path="/redteam/quick-scan" element={<QuickScanPage />} />
           <Route path="/report" element={<ReportPage />} />
           <Route path="/setup" element={<EvalCreatorPage />} />
           <Route path="/login" element={<LoginPage />} />
@@ -97,11 +100,13 @@ const router = createBrowserRouter(
             <Route path="/home" element={<LandingPage />} />
             <Route path="/redteam" element={<Navigate to="/redteam/setup" replace />} />
             <Route path="/redteam/setup" element={<RedteamSetupPage />} />
+            <Route path="/redteam/quick-scan" element={<QuickScanPage />} />
             <Route path="/redteam/reports" element={<RedteamReportsPage />} />
             <Route path="/report" element={<ReportPage />} />
             <Route path="/setup" element={<EvalCreatorPage />} />
             <Route path="/subscription" element={<SubscriptionPage />} />
             <Route path="/subscription/success" element={<SubscriptionSuccessPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
             <Route path="/onboarding" element={<OnboardingPage />} />
             <Route path="/test-plans" element={<TestPlansPage />} />
           </Route>

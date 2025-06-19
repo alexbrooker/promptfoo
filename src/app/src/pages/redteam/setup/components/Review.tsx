@@ -3,7 +3,7 @@ import { useEmailVerification } from '@app/hooks/useEmailVerification';
 import { useTelemetry } from '@app/hooks/useTelemetry';
 import { useToast } from '@app/hooks/useToast';
 import YamlEditor from '@app/pages/eval-creator/components/YamlEditor';
-import { callApi } from '@app/utils/api';
+import { callAuthenticatedApi } from '@app/utils/api';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import CloseIcon from '@mui/icons-material/Close';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -63,6 +63,7 @@ export default function Review() {
   const [isRunning, setIsRunning] = React.useState(false);
   const [logs, setLogs] = React.useState<string[]>([]);
   const [evalId, setEvalId] = React.useState<string | null>(null);
+  const [currentJobId, setCurrentJobId] = React.useState<string | null>(null);
   const { showToast } = useToast();
   const [forceRegeneration /*, setForceRegeneration*/] = React.useState(true);
   const [debugMode, setDebugMode] = React.useState(false);
@@ -84,6 +85,70 @@ export default function Review() {
 
   useEffect(() => {
     recordEvent('webui_page_view', { page: 'redteam_config_review' });
+    
+    // Check for existing running jobs on page load
+    const checkForExistingJobs = async () => {
+      try {
+        const response = await callAuthenticatedApi('/redteam/jobs');
+        const { jobs } = await response.json();
+        
+        // Find any in-progress or queued job
+        const activeJob = jobs.find((job: any) => 
+          job.status === 'in-progress' || job.status === 'queued'
+        );
+        
+        if (activeJob) {
+          setCurrentJobId(activeJob.id);
+          setIsRunning(true);
+          setLogs(activeJob.logs || []);
+          
+          // Start polling for this job
+          const interval = setInterval(async () => {
+            try {
+              const statusResponse = await callAuthenticatedApi(`/redteam/status/${activeJob.id}`);
+              const status = await statusResponse.json();
+
+              if (status.logs) {
+                setLogs(status.logs);
+              }
+
+              if (status.status === 'complete' || status.status === 'error') {
+                clearInterval(interval);
+                setPollInterval(null);
+                setIsRunning(false);
+                setCurrentJobId(null);
+
+                if (status.status === 'complete' && status.result && status.evalId) {
+                  setEvalId(status.evalId);
+                  showToast('Red team scan completed successfully!', 'success');
+                } else if (status.status === 'complete') {
+                  console.warn('No evaluation result was generated');
+                  showToast(
+                    'The evaluation completed but no results were generated. Please check the logs for details.',
+                    'warning',
+                  );
+                } else {
+                  showToast('Red team scan failed. Please check the logs for details.', 'error');
+                }
+              }
+            } catch (error) {
+              console.error('Error polling job status:', error);
+              clearInterval(interval);
+              setPollInterval(null);
+              setIsRunning(false);
+              setCurrentJobId(null);
+            }
+          }, 2000);
+          
+          setPollInterval(interval);
+          showToast(`Resumed monitoring job: ${activeJob.status}`, 'info');
+        }
+      } catch (error) {
+        console.error('Error checking for existing jobs:', error);
+      }
+    };
+    
+    checkForExistingJobs();
   }, []);
 
   const handleSaveYaml = () => {
@@ -170,9 +235,12 @@ export default function Review() {
 
   const checkForRunningJob = async (): Promise<JobStatusResponse> => {
     try {
-      const response = await callApi('/redteam/status');
+      const response = await callAuthenticatedApi('/redteam/queue/status');
       const data = await response.json();
-      return data;
+      return {
+        hasRunningJob: data.isProcessing || data.queueLength > 0,
+        jobId: data.currentJobId
+      };
     } catch (error) {
       console.error('Error checking job status:', error);
       return { hasRunningJob: false };
@@ -229,7 +297,7 @@ export default function Review() {
     setEvalId(null);
 
     try {
-      const response = await callApi('/redteam/run', {
+      const response = await callAuthenticatedApi('/redteam/run', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -244,9 +312,10 @@ export default function Review() {
       });
 
       const { id } = await response.json();
+      setCurrentJobId(id);
 
       const interval = setInterval(async () => {
-        const statusResponse = await callApi(`/eval/job/${id}`);
+        const statusResponse = await callAuthenticatedApi(`/redteam/status/${id}`);
         const status = (await statusResponse.json()) as Job;
 
         if (status.logs) {
@@ -257,6 +326,7 @@ export default function Review() {
           clearInterval(interval);
           setPollInterval(null);
           setIsRunning(false);
+          setCurrentJobId(null);
 
           if (status.status === 'complete' && status.result && status.evalId) {
             setEvalId(status.evalId);
@@ -288,8 +358,13 @@ export default function Review() {
   };
 
   const handleCancel = async () => {
+    if (!currentJobId) {
+      showToast('No job to cancel', 'warning');
+      return;
+    }
+
     try {
-      await callApi('/redteam/cancel', {
+      await callAuthenticatedApi(`/redteam/cancel/${currentJobId}`, {
         method: 'POST',
       });
 
@@ -299,6 +374,7 @@ export default function Review() {
       }
 
       setIsRunning(false);
+      setCurrentJobId(null);
       showToast('Cancel request submitted', 'success');
     } catch (error) {
       console.error('Error cancelling job:', error);

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@app/lib/supabase';
 import { useUserStore } from '@app/stores/userStore';
+import { callAuthenticatedApi } from '@app/utils/api';
 
 interface Invoice {
   id: string;
@@ -49,21 +49,7 @@ export function useSubscription(): UseSubscriptionReturn {
     setError(null);
 
     try {
-      // Get the current session token
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      const token = session?.access_token;
-
-      if (!token) {
-        throw new Error('No access token found');
-      }
-
-      const response = await fetch('http://localhost:15500/api/stripe/subscription', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const response = await callAuthenticatedApi('/stripe/subscription');
 
       if (response.status === 404) {
         // No subscription found - this is normal for new users
@@ -98,22 +84,8 @@ export function useSubscription(): UseSubscriptionReturn {
       setError(null);
 
       try {
-        // Get the current session token
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        const token = session?.access_token;
-
-        if (!token) {
-          throw new Error('No access token found');
-        }
-
-        const response = await fetch('http://localhost:15500/api/stripe/subscription', {
+        const response = await callAuthenticatedApi('/stripe/subscription', {
           method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
           body: JSON.stringify(updates),
         });
 

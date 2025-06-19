@@ -17,33 +17,13 @@ import Typography from '@mui/material/Typography';
 const links: { icon: JSX.Element; text: string; href: string }[] = [
   {
     icon: <MenuBookIcon fontSize="small" />,
-    text: 'Documentation',
-    href: 'https://www.promptfoo.dev/docs/intro',
-  },
-  {
-    icon: <GitHubIcon fontSize="small" />,
-    text: 'GitHub Repository',
-    href: 'https://github.com/promptfoo/promptfoo',
-  },
-  {
-    icon: <BugReportIcon fontSize="small" />,
-    text: 'File an Issue',
-    href: 'https://github.com/promptfoo/promptfoo/issues',
-  },
-  {
-    icon: <ForumIcon fontSize="small" />,
-    text: 'Join Our Discord Community',
-    href: 'https://discord.gg/promptfoo',
+    text: 'Airside Labs Website',
+    href: 'https://airsidelabs.com',
   },
   {
     icon: <CalendarTodayIcon fontSize="small" />,
     text: 'Book a Meeting',
-    href: 'https://cal.com/team/promptfoo/intro2',
-  },
-  {
-    icon: <WorkIcon fontSize="small" />,
-    text: 'Careers',
-    href: 'https://www.promptfoo.dev/careers/',
+    href: 'https://cal.com/airsidelabs/15min',
   },
 ];
 
@@ -57,30 +37,19 @@ export default function InfoModal<T extends { open: boolean; onClose: () => void
       onClose={onClose}
       maxWidth="xs"
       fullWidth
-      aria-labelledby="about-promptfoo-dialog-title"
+      aria-labelledby="about-airside-dialog-title"
     >
-      <DialogTitle id="about-promptfoo-dialog-title">
+      <DialogTitle id="about-airside-dialog-title">
         <Stack>
-          <Typography variant="h6">About Promptfoo</Typography>
-          <Link
-            href="https://github.com/promptfoo/promptfoo/releases"
-            underline="none"
-            sx={{
-              color: 'inherit',
-            }}
-            target="_blank"
-          >
-            <Typography variant="subtitle2">
-              Version {import.meta.env.VITE_PROMPTFOO_VERSION}
-            </Typography>
-          </Link>
+          <Typography variant="h6">About Airside Labs</Typography>
+          <Typography variant="subtitle2">
+            Version {import.meta.env.VITE_PROMPTFOO_VERSION}
+          </Typography>
         </Stack>
       </DialogTitle>
       <DialogContent>
         <Typography variant="body2" gutterBottom>
-          Promptfoo is a MIT licensed open-source tool for evaluating and red-teaming LLMs. We make
-          it easy to track the performance of your models and prompts over time with automated
-          support for dataset generation and grading.
+          Airside Labs provides AI security testing and evaluation services. This application is built using Promptfoo, an MIT licensed open-source tool for evaluating and red-teaming LLMs.
         </Typography>
         <Stack spacing={2} mt={2}>
           {links.map((item, index) => (

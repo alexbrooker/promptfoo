@@ -1,8 +1,10 @@
 import React, { useState, forwardRef } from 'react';
 import type { LinkProps } from 'react-router-dom';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 import InfoIcon from '@mui/icons-material/Info';
+import LogoutIcon from '@mui/icons-material/Logout';
+import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import AppBar from '@mui/material/AppBar';
 import Box from '@mui/material/Box';
 import type { ButtonProps } from '@mui/material/Button';
@@ -12,8 +14,10 @@ import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import Toolbar from '@mui/material/Toolbar';
 import Tooltip from '@mui/material/Tooltip';
+import Chip from '@mui/material/Chip';
 import { styled } from '@mui/material/styles';
 import { useUIStore } from '../stores/uiStore';
+import { useUserStore } from '../stores/userStore';
 import DarkMode from './DarkMode';
 import InfoModal from './InfoModal';
 import Logo from './Logo';
@@ -63,19 +67,42 @@ function NavLink({ href, label }: { href: string; label: string }) {
   );
 }
 
-// Simplified - Red team only
+// Create dropdown with both options
 function CreateButton() {
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const open = Boolean(anchorEl);
   const location = useLocation();
-  const isActive = location.pathname.startsWith('/redteam/setup');
+
+  const handleClick = (event: React.MouseEvent<HTMLElement>) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleClose = () => {
+    setAnchorEl(null);
+  };
+
+  const isActive = ['/redteam/setup', '/redteam/quick-scan'].some((route) =>
+    location.pathname.startsWith(route),
+  );
 
   return (
-    <NavButton 
-      component={RouterLink} 
-      to="/redteam/setup" 
-      className={isActive ? 'active' : ''}
-    >
-      Create Security Test
-    </NavButton>
+    <>
+      <NavButton
+        onClick={handleClick}
+        endIcon={<ArrowDropDownIcon />}
+        className={isActive ? 'active' : ''}
+      >
+        Create Security Test
+      </NavButton>
+      <Menu anchorEl={anchorEl} open={open} onClose={handleClose}>
+        <MenuItem onClick={handleClose} component={RouterLink} to="/redteam/quick-scan">
+          Quick Scan
+        </MenuItem>
+        <MenuItem onClick={handleClose} component={RouterLink} to="/redteam/setup">
+          Full Setup
+        </MenuItem>
+      </Menu>
+    </>
   );
 }
 
@@ -127,8 +154,19 @@ export default function Navigation({
 }) {
   const [showInfoModal, setShowInfoModal] = useState<boolean>(false);
   const isNavbarVisible = useUIStore((state) => state.isNavbarVisible);
+  const { user, signOut, onboardingData } = useUserStore();
+  const navigate = useNavigate();
 
   const handleModalToggle = () => setShowInfoModal((prevState) => !prevState);
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      navigate('/login');
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
 
   if (!isNavbarVisible) {
     return null;
@@ -140,17 +178,33 @@ export default function Navigation({
         <NavToolbar>
           <NavSection>
             <Logo />
-            <NavLink href="/home" label="Home" />
             <CreateButton />
             <ComplianceDropdown />
             <NavLink href="/subscription" label="Subscription" />
-            <NavLink href="/model-audit" label="Model Audit" />
           </NavSection>
           <NavSection>
+            {user && (
+              <Tooltip title="Scan Credits">
+                <Chip
+                  icon={<AccountBalanceWalletIcon />}
+                  label={onboardingData.scanCredits || 0}
+                  color="primary"
+                  variant="outlined"
+                  size="small"
+                />
+              </Tooltip>
+            )}
             <IconButton onClick={handleModalToggle} color="inherit">
               <InfoIcon />
             </IconButton>
             <DarkMode onToggleDarkMode={onToggleDarkMode} />
+            {user && (
+              <Tooltip title="Sign Out">
+                <IconButton onClick={handleSignOut} color="inherit">
+                  <LogoutIcon />
+                </IconButton>
+              </Tooltip>
+            )}
           </NavSection>
         </NavToolbar>
       </StyledAppBar>

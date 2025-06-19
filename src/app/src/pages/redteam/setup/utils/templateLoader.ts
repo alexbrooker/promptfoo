@@ -1,4 +1,4 @@
-import { callApi } from '@app/utils/api';
+import { callAuthenticatedApi } from '@app/utils/api';
 import type { Config } from '../types';
 
 export type TemplateTier = 'quick' | 'business';
@@ -47,7 +47,7 @@ export const templateInfo: Record<TemplateTier, TemplateInfo> = {
 
 export async function loadTemplate(tier: TemplateTier): Promise<Config> {
   try {
-    const response = await callApi(`/configs/templates/${tier}`);
+    const response = await callAuthenticatedApi(`/configs/templates/${tier}`);
     
     if (!response.ok) {
       throw new Error(`Failed to load ${tier} template: ${response.statusText}`);

@@ -23,7 +23,21 @@ providersRouter.post('/test', async (req: Request, res: Response): Promise<void>
   }
   invariant(providerOptions.id, 'id is required');
 
-  const loadedProvider = await loadApiProvider(providerOptions.id, { options: providerOptions });
+  let loadedProvider;
+  try {
+    loadedProvider = await loadApiProvider(providerOptions.id, { options: providerOptions });
+  } catch (error) {
+    logger.error(
+      dedent`[POST /providers/test] Error loading provider
+        error: ${error instanceof Error ? error.message : String(error)}
+        providerOptions: ${JSON.stringify(providerOptions)}`,
+    );
+    res.status(400).json({ 
+      error: `Failed to load provider configuration: ${error instanceof Error ? error.message : String(error)}` 
+    });
+    return;
+  }
+
   // Call the provider with the test prompt
   let result;
   try {

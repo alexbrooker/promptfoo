@@ -203,6 +203,30 @@ export async function handleChargeSucceeded(charge: Stripe.Charge): Promise<void
     // The checkout session metadata should flow through to the charge
     const planInfo = charge.metadata?.planId || charge.metadata?.plan_id || 'basic_one_off';
     
+    // If this is a Quick Check purchase, increment scan credits
+    if (planInfo === 'quick_check') {
+      // Get current credits first
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('scan_credits')
+        .eq('id', user.userId)
+        .single();
+
+      const { error: creditError } = await supabase
+        .from('profiles')
+        .update({
+          scan_credits: (profile?.scan_credits || 0) + 1,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', user.userId);
+
+      if (creditError) {
+        throw new Error(`Failed to increment scan credits: ${creditError.message}`);
+      }
+
+      logger.info(`Incremented scan credits for user ${user.userId} after Quick Check purchase`);
+    }
+    
     const { error } = await supabase
       .from('usage_logs')
       .insert({

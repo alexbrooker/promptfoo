@@ -1,127 +1,99 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
-import { v4 as uuidv4 } from 'uuid';
-import cliState from '../../cliState';
 import logger from '../../logger';
 import { getRemoteGenerationUrl } from '../../redteam/remoteGeneration';
-import { doRedteamRun } from '../../redteam/shared';
-import { evalJobs } from './eval';
+import { authenticateSupabaseUser, supabase, type AuthenticatedRequest } from '../middleware/auth';
+import { userJobManager } from '../services/userJobManager';
 
 export const redteamRouter = Router();
 
-// Track the current running job
-let currentJobId: string | null = null;
-let currentAbortController: AbortController | null = null;
-
-redteamRouter.post('/run', async (req: Request, res: Response): Promise<void> => {
-  // If there's a current job running, abort it
-  if (currentJobId) {
-    if (currentAbortController) {
-      currentAbortController.abort();
-    }
-    const existingJob = evalJobs.get(currentJobId);
-    if (existingJob) {
-      existingJob.status = 'error';
-      existingJob.logs.push('Job cancelled - new job started');
-    }
-  }
-
-  const { config, force, verbose, delay, maxConcurrency } = req.body;
-  const id = uuidv4();
-  currentJobId = id;
-  currentAbortController = new AbortController();
-
-  // Initialize job status with empty logs array
-  evalJobs.set(id, {
-    evalId: null,
-    status: 'in-progress',
-    progress: 0,
-    total: 0,
-    result: null,
-    logs: [],
-  });
-
-  // Set web UI mode
-  cliState.webUI = true;
-
-  // Validate and normalize maxConcurrency
-  const normalizedMaxConcurrency = Math.max(1, Number(maxConcurrency || '1'));
-
-  // Run redteam in background
-  doRedteamRun({
-    liveRedteamConfig: config,
-    force,
-    verbose,
-    delay: Number(delay || '0'),
-    maxConcurrency: normalizedMaxConcurrency,
-    logCallback: (message: string) => {
-      if (currentJobId === id) {
-        const job = evalJobs.get(id);
-        if (job) {
-          job.logs.push(message);
-        }
-      }
-    },
-    abortSignal: currentAbortController.signal,
-  })
-    .then(async (evalResult) => {
-      const summary = evalResult ? await evalResult.toEvaluateSummary() : null;
-      const job = evalJobs.get(id);
-      if (job && currentJobId === id) {
-        job.status = 'complete';
-        job.result = summary;
-        job.evalId = evalResult?.id ?? null;
-      }
-      if (currentJobId === id) {
-        cliState.webUI = false;
-        currentJobId = null;
-        currentAbortController = null;
-      }
-    })
-    .catch((error) => {
-      logger.error(`Error running redteam: ${error}`);
-      const job = evalJobs.get(id);
-      if (job && currentJobId === id) {
-        job.status = 'error';
-        job.logs.push(`Error: ${error.message}`);
-      }
-      if (currentJobId === id) {
-        cliState.webUI = false;
-        currentJobId = null;
-        currentAbortController = null;
-      }
-    });
-
-  res.json({ id });
-});
-
-redteamRouter.post('/cancel', async (req: Request, res: Response): Promise<void> => {
-  if (!currentJobId) {
-    res.status(400).json({ error: 'No job currently running' });
+redteamRouter.post('/run', authenticateSupabaseUser, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  // Check scan credits before proceeding
+  if (!req.user) {
+    res.status(401).json({ error: 'User not authenticated' });
     return;
   }
 
-  const jobId = currentJobId;
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('scan_credits, credits_used')
+    .eq('id', req.user.id)
+    .single();
 
-  if (currentAbortController) {
-    currentAbortController.abort();
+  if (profileError) {
+    logger.error(`Error fetching user profile: ${profileError.message}`);
+    res.status(500).json({ error: 'Failed to fetch user profile' });
+    return;
   }
 
-  const job = evalJobs.get(jobId);
-  if (job) {
-    job.status = 'error';
-    job.logs.push('Job cancelled by user');
+  const scanCredits = profile?.scan_credits || 0;
+  if (scanCredits <= 0) {
+    res.status(402).json({ 
+      error: 'Insufficient scan credits', 
+      message: 'You need to purchase scan credits to run a security scan.',
+      scanCredits,
+    });
+    return;
   }
 
-  // Clear state
-  cliState.webUI = false;
-  currentJobId = null;
-  currentAbortController = null;
+  // Consume the scan credit immediately (to prevent gaming)
+  const { error: creditError } = await supabase
+    .from('profiles')
+    .update({
+      scan_credits: scanCredits - 1,
+      credits_used: (profile?.credits_used || 0) + 1,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', req.user.id);
 
-  // Wait a moment to ensure cleanup
-  await new Promise((resolve) => setTimeout(resolve, 100));
+  if (creditError) {
+    logger.error(`Error consuming scan credit: ${creditError.message}`);
+    res.status(500).json({ error: 'Failed to consume scan credit' });
+    return;
+  }
 
-  res.json({ message: 'Job cancelled' });
+  const { config } = req.body;
+  
+  // Enqueue the job instead of running immediately
+  const jobId = await userJobManager.enqueueJob(req.user.id, req.user.email || '', config);
+
+  // Log credit consumption
+  await supabase.from('usage_logs').insert({
+    user_id: req.user.id,
+    action: 'scan_credit_consumed',
+    metadata: {
+      scan_id: jobId,
+      credits_remaining: scanCredits - 1,
+      credits_consumed: 1,
+    }
+  });
+
+  logger.info(`Consumed scan credit for user ${req.user.id}, remaining credits: ${scanCredits - 1}`);
+
+  const queuePosition = userJobManager.getQueuePosition(req.user.id, jobId);
+  
+  res.json({ 
+    id: jobId,
+    status: 'queued',
+    queuePosition,
+    message: queuePosition === 1 ? 'Starting scan...' : `Queued (position ${queuePosition})`,
+  });
+});
+
+redteamRouter.post('/cancel/:jobId', authenticateSupabaseUser, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  if (!req.user) {
+    res.status(401).json({ error: 'User not authenticated' });
+    return;
+  }
+
+  const { jobId } = req.params;
+  const cancelled = await userJobManager.cancelJob(req.user.id, jobId);
+
+  if (cancelled) {
+    res.json({ message: 'Job cancelled successfully' });
+  } else {
+    res.status(400).json({ error: 'Job not found or cannot be cancelled' });
+  }
 });
 
 // NOTE: This comes last, so the other routes take precedence
@@ -163,9 +135,73 @@ redteamRouter.post('/:task', async (req: Request, res: Response): Promise<void> 
   }
 });
 
-redteamRouter.get('/status', async (req: Request, res: Response): Promise<void> => {
+redteamRouter.get('/status/:jobId', authenticateSupabaseUser, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  if (!req.user) {
+    res.status(401).json({ error: 'User not authenticated' });
+    return;
+  }
+
+  const { jobId } = req.params;
+  const job = userJobManager.getUserJob(req.user.id, jobId);
+
+  if (!job) {
+    res.status(404).json({ error: 'Job not found' });
+    return;
+  }
+
+  const queuePosition = userJobManager.getQueuePosition(req.user.id, jobId);
+
   res.json({
-    hasRunningJob: currentJobId !== null,
-    jobId: currentJobId,
+    id: job.id,
+    status: job.status,
+    progress: job.progress,
+    total: job.total,
+    result: job.result,
+    logs: job.logs,
+    queuePosition,
+    queuedAt: job.queuedAt,
+    startTime: job.startTime,
   });
+});
+
+redteamRouter.get('/jobs', authenticateSupabaseUser, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  if (!req.user) {
+    res.status(401).json({ error: 'User not authenticated' });
+    return;
+  }
+
+  const jobs = userJobManager.getUserJobs(req.user.id);
+  res.json({ jobs });
+});
+
+redteamRouter.get('/queue/status', async (req: Request, res: Response): Promise<void> => {
+  const queueStatus = userJobManager.getQueueStatus();
+  res.json(queueStatus);
+});
+
+redteamRouter.get('/results', authenticateSupabaseUser, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  if (!req.user) {
+    res.status(401).json({ error: 'User not authenticated' });
+    return;
+  }
+
+  try {
+    const { getDb } = await import('../../database');
+    const { evalsTable } = await import('../../database/tables');
+    const { eq, desc } = await import('drizzle-orm');
+    
+    const db = getDb();
+    
+    // Get user's evaluations using the author field
+    const results = await db.select()
+      .from(evalsTable)
+      .where(eq(evalsTable.author, req.user.email || ''))
+      .orderBy(desc(evalsTable.createdAt))
+      .limit(50); // Limit to recent results
+    
+    res.json({ results });
+  } catch (error) {
+    logger.error(`Error fetching user results: ${error}`);
+    res.status(500).json({ error: 'Failed to fetch results' });
+  }
 });

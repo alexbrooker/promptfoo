@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useStripe } from '@app/hooks/useStripe';
 import { useSubscription } from '@app/hooks/useSubscription';
+import { useUserStore } from '@app/stores/userStore';
 import { callApi, callAuthenticatedApi } from '@app/utils/api';
-import { CheckCircle, Cancel, CreditCard, Receipt, Settings } from '@mui/icons-material';
+import { CheckCircle, Cancel, CreditCard, Receipt, Settings, AccountBalanceWallet } from '@mui/icons-material';
 import {
   Box,
   Container,
@@ -56,6 +57,7 @@ export default function SubscriptionPage() {
     updateSubscription,
   } = useSubscription();
   const { createCheckoutSession, createPortalSession, loading: stripeLoading } = useStripe();
+  const { onboardingData, fetchOnboardingData } = useUserStore();
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [plansLoading, setPlansLoading] = useState(true);
@@ -104,6 +106,11 @@ export default function SubscriptionPage() {
 
     fetchOneOffPayments();
   }, []);
+
+  // Fetch user profile data on component mount
+  useEffect(() => {
+    fetchOnboardingData();
+  }, [fetchOnboardingData]);
 
   const handleSubscribe = async (planId: string) => {
     const plan = plans.find((p) => p.id === planId);
@@ -234,6 +241,44 @@ export default function SubscriptionPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Scan Credits Section */}
+      <Card sx={{ mb: 4 }}>
+        <CardContent>
+          <Typography variant="h6" gutterBottom>
+            Scan Credits
+          </Typography>
+          <Grid container spacing={2} alignItems="center">
+            <Grid item>
+              <AccountBalanceWallet color="primary" sx={{ fontSize: 40 }} />
+            </Grid>
+            <Grid item>
+              <Typography variant="h4" component="span" color="primary">
+                {onboardingData.scanCredits || 0}
+              </Typography>
+              <Typography variant="body1" component="span" sx={{ ml: 1 }}>
+                credits remaining
+              </Typography>
+            </Grid>
+            <Grid item xs />
+            <Grid item>
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={() => handleSubscribe('quick_check')}
+                disabled={stripeLoading}
+              >
+                Buy More Credits
+              </Button>
+            </Grid>
+          </Grid>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+            Total credits used: {onboardingData.creditsUsed || 0} • 
+            Each scan consumes 1 credit • 
+            Credits are refunded if scans fail early
+          </Typography>
+        </CardContent>
+      </Card>
 
       {/* Available Plans */}
       {(!subscription || subscription.status === 'canceled') && (

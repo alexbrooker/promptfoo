@@ -1,8 +1,10 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
-import Navigation from '@app/components/Navigation';
+import { Sidebar } from '@app/components/sidebar';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
+import { Box } from '@mui/material';
 import useMediaQuery from '@mui/material/useMediaQuery';
+import { useSidebarStore } from '@app/stores/sidebarStore';
 
 const createAppTheme = (darkMode: boolean) =>
   createTheme({
@@ -231,7 +233,31 @@ const lightTheme = createAppTheme(false);
 const darkTheme = createAppTheme(true);
 
 function Layout({ children }: { children: React.ReactNode }) {
-  return <div>{children}</div>;
+  const { isExpanded, isMobile } = useSidebarStore();
+  
+  const sidebarWidth = isMobile ? 0 : isExpanded ? 280 : 64;
+  
+  return (
+    <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+      <Sidebar />
+      <Box
+        component="main"
+        sx={{
+          flexGrow: 1,
+          width: `calc(100vw - ${sidebarWidth}px)`,
+          height: '100vh',
+          overflow: 'auto',
+          transition: (theme) => theme.transitions.create('width', {
+            easing: theme.transitions.easing.easeInOut,
+            duration: theme.transitions.duration.standard,
+          }),
+          backgroundColor: 'background.default',
+        }}
+      >
+        {children}
+      </Box>
+    </Box>
+  );
 }
 
 export default function PageShell() {
@@ -244,7 +270,7 @@ export default function PageShell() {
     setDarkMode(savedMode === null ? prefersDarkMode : savedMode === 'true');
   }, [prefersDarkMode]);
 
-  const toggleDarkMode = useCallback(() => {
+  const _toggleDarkMode = useCallback(() => {
     setDarkMode((prevMode) => {
       const newMode = !prevMode;
       localStorage.setItem('darkMode', String(newMode));
@@ -272,7 +298,6 @@ export default function PageShell() {
   return (
     <ThemeProvider theme={darkMode ? darkTheme : lightTheme}>
       <Layout>
-        <Navigation darkMode={darkMode} onToggleDarkMode={toggleDarkMode} />
         <Outlet />
       </Layout>
     </ThemeProvider>

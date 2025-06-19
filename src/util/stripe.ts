@@ -13,9 +13,9 @@ export const SUBSCRIPTION_PLANS = {
   quick_check: {
     id: 'quick_check',
     name: 'Quick Check',
-    priceId: process.env.STRIPE_QUICK_CHECK_PRICE_ID || 'price_quick_check',
-    price: 49,
-    discountedPrice: 29,
+    priceId: process.env.STRIPE_QUICK_CHECK_PRICE_ID || 'quick_check',
+    price: 699,
+    discountedPrice: 499,
     active: true,
     interval: 'one-off' as const,
     features: [
@@ -30,9 +30,9 @@ export const SUBSCRIPTION_PLANS = {
   business_scan: {
     id: 'business_scan',
     name: 'Business Scan',
-    priceId: process.env.STRIPE_BUSINESS_SCAN_PRICE_ID || 'price_business_scan',
-    price: 999,
-    discountedPrice: 499,
+    priceId: process.env.STRIPE_BUSINESS_SCAN_PRICE_ID || 'business_scan',
+    price: 5000,
+    discountedPrice: 3500,
     active: true,
     interval: 'one-off' as const,
     features: [
@@ -48,7 +48,7 @@ export const SUBSCRIPTION_PLANS = {
   monthly_monitoring: {
     id: 'monthly_monitoring',
     name: 'Monthly Monitoring',
-    priceId: process.env.STRIPE_MONTHLY_MONITORING_PRICE_ID || 'price_monthly_monitoring',
+    priceId: process.env.STRIPE_MONTHLY_MONITORING_PRICE_ID || 'monthly_monitoring',
     price: 750,
     discountedPrice: 599,
     active: true,
@@ -174,7 +174,7 @@ export function formatSubscriptionForResponse(
 ) {
   const priceId = subscription.items.data[0]?.price.id;
   const plan = getPlanByPriceId(priceId || '');
-  
+
   // Get the actual price from Stripe instead of local plan definition
   const stripePrice = subscription.items.data[0]?.price;
   const actualPrice = stripePrice?.unit_amount || plan?.price || 0;
@@ -183,7 +183,7 @@ export function formatSubscriptionForResponse(
     id: subscription.id,
     status: subscription.status,
     planId: plan?.id || 'unknown',
-    planName: plan?.name || 'Unknown Plan',
+    planName: plan?.name || 'Unknownn Plan',
     price: actualPrice / 100, // Convert from cents to dollars
     interval: plan?.interval || 'month',
     currentPeriodStart: subscription.items.data[0]?.current_period_start,
