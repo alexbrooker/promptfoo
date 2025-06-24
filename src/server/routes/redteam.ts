@@ -187,17 +187,58 @@ redteamRouter.get('/results', authenticateSupabaseUser, async (req: Authenticate
 
   try {
     const { getDb } = await import('../../database');
-    const { evalsTable } = await import('../../database/tables');
-    const { eq, desc } = await import('drizzle-orm');
+    const { evalsTable, evalsToDatasetsTable } = await import('../../database/tables');
+    const { eq, desc, sql } = await import('drizzle-orm');
     
     const db = getDb();
+    const userEmail = req.user.email || '';
     
-    // Get user's evaluations using the author field
-    const results = await db.select()
+    // Use the same query structure as getEvalSummaries but filter by user email
+    const dbResults = db
+      .select({
+        evalId: evalsTable.id,
+        createdAt: evalsTable.createdAt,
+        description: evalsTable.description,
+        datasetId: evalsToDatasetsTable.datasetId,
+        isRedteam: sql<boolean>`json_type(${evalsTable.config}, '$.redteam') IS NOT NULL`,
+        prompts: evalsTable.prompts,
+      })
       .from(evalsTable)
-      .where(eq(evalsTable.author, req.user.email || ''))
+      .leftJoin(evalsToDatasetsTable, eq(evalsTable.id, evalsToDatasetsTable.evalId))
+      .where(eq(evalsTable.author, userEmail))
       .orderBy(desc(evalsTable.createdAt))
-      .limit(50); // Limit to recent results
+      .limit(50)
+      .all();
+
+    // Transform using the same logic as getEvalSummaries
+    const results = dbResults.map((result) => {
+      const passCount =
+        result.prompts?.reduce((memo, prompt) => {
+          return memo + (prompt.metrics?.testPassCount ?? 0);
+        }, 0) ?? 0;
+
+      const testCounts = result.prompts?.map((p) => {
+        return (
+          (p.metrics?.testPassCount ?? 0) +
+          (p.metrics?.testFailCount ?? 0) +
+          (p.metrics?.testErrorCount ?? 0)
+        );
+      }) ?? [0];
+
+      const testCount = testCounts.length > 0 ? testCounts[0] : 0;
+      const testRunCount = testCount * (result.prompts?.length ?? 0);
+
+      return {
+        evalId: result.evalId,
+        createdAt: result.createdAt,
+        description: result.description,
+        numTests: testCount,
+        datasetId: result.datasetId,
+        isRedteam: result.isRedteam,
+        passRate: testRunCount > 0 ? (passCount / testRunCount) * 100 : 0,
+        label: result.description ? `${result.description} (${result.evalId})` : result.evalId,
+      };
+    });
     
     res.json({ results });
   } catch (error) {

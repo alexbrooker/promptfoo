@@ -113,15 +113,33 @@ export default function RedteamReportsDataGrid({
   useEffect(() => {
     const fetchRedteamEvals = async () => {
       try {
-        const response = await callAuthenticatedApi('/results', { cache: 'no-store' });
+        console.log('[DEBUG] Fetching redteam evals from /redteam/results...');
+        const response = await callAuthenticatedApi('/redteam/results', { cache: 'no-store' });
+        console.log('[DEBUG] Response status:', response.status);
         if (!response.ok) {
           throw new Error('Failed to fetch evaluations');
         }
-        const body = (await response.json()) as { data: RedteamEval[] };
+        const body = (await response.json()) as { results: RedteamEval[] };
+        console.log('[DEBUG] Raw response body:', body);
+        console.log('[DEBUG] Results count:', body.results?.length || 0);
+        
+        if (body.results) {
+          body.results.forEach((eval_, idx) => {
+            console.log(`[DEBUG] Result ${idx}:`, {
+              id: eval_.evalId,
+              isRedteam: eval_.isRedteam,
+              description: eval_.description,
+              createdAt: eval_.createdAt
+            });
+          });
+        }
+        
         // Filter for only red team evaluations
-        const redteamEvals = body.data.filter((eval_) => eval_.isRedteam);
+        const redteamEvals = body.results.filter((eval_) => eval_.isRedteam);
+        console.log('[DEBUG] Filtered redteam evals count:', redteamEvals.length);
         setEvals(redteamEvals);
       } catch (error) {
+        console.error('[DEBUG] Error fetching evals:', error);
         setError(error as Error);
       } finally {
         setIsLoading(false);
@@ -167,10 +185,10 @@ export default function RedteamReportsDataGrid({
         headerName: 'Created',
         flex: 1,
         type: 'dateTime',
-        valueGetter: (params) => new Date(params * 1000),
+        valueGetter: (params) => new Date(params),
         renderCell: (params: GridRenderCellParams<RedteamEval>) => (
           <Typography variant="body2">
-            {new Date(params.row.createdAt * 1000).toLocaleDateString('en-US', {
+            {new Date(params.row.createdAt).toLocaleDateString('en-US', {
               year: 'numeric',
               month: 'short',
               day: 'numeric',
@@ -198,10 +216,10 @@ export default function RedteamReportsDataGrid({
         type: 'number',
         renderCell: (params: GridRenderCellParams<RedteamEval>) => {
           const passRate = params.row.passRate;
-          const color = passRate >= 0.8 ? 'success' : passRate >= 0.6 ? 'warning' : 'error';
+          const color = passRate >= 80 ? 'success' : passRate >= 60 ? 'warning' : 'error';
           return (
             <Chip
-              label={`${(passRate * 100).toFixed(1)}%`}
+              label={`${passRate.toFixed(1)}%`}
               color={color}
               size="small"
               variant="outlined"

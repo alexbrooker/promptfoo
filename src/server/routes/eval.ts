@@ -4,6 +4,7 @@ import type { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 import { fromZodError } from 'zod-validation-error';
+import { authenticateSupabaseUser, type AuthenticatedRequest } from '../middleware/auth';
 import { getUserEmail, setUserEmail } from '../../globalConfig/accounts';
 import type {
   EvaluateSummaryV2,
@@ -405,5 +406,79 @@ evalRouter.delete('/:id', async (req: Request, res: Response): Promise<void> => 
     res.json({ message: 'Eval deleted successfully' });
   } catch {
     res.status(500).json({ error: 'Failed to delete eval' });
+  }
+});
+
+// User-filtered results endpoint
+evalRouter.get('/results', authenticateSupabaseUser, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  if (!req.user) {
+    res.status(401).json({ error: 'User not authenticated' });
+    return;
+  }
+
+  try {
+    const { getEvalSummaries } = await import('../../models/eval');
+    const { getDb } = await import('../../database');
+    const { evalsTable, evalsToDatasetsTable } = await import('../../database/tables');
+    const { eq, desc, sql } = await import('drizzle-orm');
+    
+    const db = getDb();
+    const userEmail = req.user.email || '';
+    const { datasetId } = req.query;
+
+    // Use the same query structure as getEvalSummaries but filter by user email
+    const results = db
+      .select({
+        evalId: evalsTable.id,
+        createdAt: evalsTable.createdAt,
+        description: evalsTable.description,
+        datasetId: evalsToDatasetsTable.datasetId,
+        isRedteam: sql<boolean>`json_type(${evalsTable.config}, '$.redteam') IS NOT NULL`,
+        prompts: evalsTable.prompts,
+      })
+      .from(evalsTable)
+      .leftJoin(evalsToDatasetsTable, eq(evalsTable.id, evalsToDatasetsTable.evalId))
+      .where(
+        datasetId 
+          ? sql`${evalsTable.author} = ${userEmail} AND ${evalsToDatasetsTable.datasetId} = ${datasetId}`
+          : eq(evalsTable.author, userEmail)
+      )
+      .orderBy(desc(evalsTable.createdAt))
+      .all();
+
+    // Transform using the same logic as getEvalSummaries
+    const transformedResults = results.map((result) => {
+      const passCount =
+        result.prompts?.reduce((memo, prompt) => {
+          return memo + (prompt.metrics?.testPassCount ?? 0);
+        }, 0) ?? 0;
+
+      const testCounts = result.prompts?.map((p) => {
+        return (
+          (p.metrics?.testPassCount ?? 0) +
+          (p.metrics?.testFailCount ?? 0) +
+          (p.metrics?.testErrorCount ?? 0)
+        );
+      }) ?? [0];
+
+      const testCount = testCounts.length > 0 ? testCounts[0] : 0;
+      const testRunCount = testCount * (result.prompts?.length ?? 0);
+
+      return {
+        evalId: result.evalId,
+        createdAt: result.createdAt,
+        description: result.description,
+        numTests: testCount,
+        datasetId: result.datasetId,
+        isRedteam: result.isRedteam,
+        passRate: testRunCount > 0 ? (passCount / testRunCount) * 100 : 0,
+        label: result.description ? `${result.description} (${result.evalId})` : result.evalId,
+      };
+    });
+
+    res.json({ data: transformedResults });
+  } catch (error) {
+    logger.error(`Error fetching user eval results: ${error}`);
+    res.status(500).json({ error: 'Failed to fetch eval results' });
   }
 });

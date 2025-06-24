@@ -164,8 +164,8 @@ export default function Sidebar() {
             />
             <SidebarItem
               icon={<Security />}
-              label="Full Setup"
-              href="/redteam/setup"
+              label="Full Setup (Coming Soon)"
+              disabled={true}
             />
           </SidebarSection>
 

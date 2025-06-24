@@ -1,4 +1,4 @@
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
@@ -6,30 +6,56 @@ import { getDb } from '../../database';
 import { configsTable } from '../../database/tables';
 import logger from '../../logger';
 import { templates, type TemplateTier } from '../templates/redteamTemplates';
+import { authenticateSupabaseUser, optionalSupabaseAuth, supabase, type AuthenticatedRequest } from '../middleware/auth';
 
 export const configsRouter = Router();
 
-configsRouter.get('/', async (req: Request, res: Response): Promise<void> => {
+configsRouter.get('/', authenticateSupabaseUser, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const db = await getDb();
   try {
-    const type = req.query.type as string;
-    const query = db
+    const type = req.query.type as string || 'redteam';
+    
+    // Get user's config IDs from Supabase mapping table
+    const { data: userConfigMappings, error: mappingError } = await supabase
+      .from('user_configs')
+      .select('config_id')
+      .eq('user_id', req.user!.id)
+      .eq('config_type', type);
+    
+    if (mappingError) {
+      logger.error(`Error fetching user config mappings: ${mappingError.message}`);
+      res.status(500).json({ error: 'Failed to fetch user configs' });
+      return;
+    }
+    
+    const userConfigIds = userConfigMappings?.map(mapping => mapping.config_id) || [];
+    
+    // If user has no configs, return empty array
+    if (userConfigIds.length === 0) {
+      res.json({ configs: [] });
+      return;
+    }
+    
+    // Query promptfoo configs table filtered by user's config IDs
+    const configs = await db
       .select({
         id: configsTable.id,
         name: configsTable.name,
         createdAt: configsTable.createdAt,
         updatedAt: configsTable.updatedAt,
         type: configsTable.type,
+        config: configsTable.config,
       })
       .from(configsTable)
+      .where(
+        and(
+          eq(configsTable.type, type),
+          inArray(configsTable.id, userConfigIds)
+        )
+      )
       .orderBy(configsTable.updatedAt);
 
-    if (type) {
-      query.where(eq(configsTable.type, type));
-    }
-
-    const configs = await query;
-    logger.info(`Loaded ${configs.length} configs${type ? ` of type ${type}` : ''}`);
+    logger.info(`Loaded ${configs.length} configs of type ${type} for user ${req.user!.email}`);
 
     res.json({ configs });
   } catch (error) {
@@ -38,18 +64,19 @@ configsRouter.get('/', async (req: Request, res: Response): Promise<void> => {
   }
 });
 
-configsRouter.post('/', async (req: Request, res: Response): Promise<void> => {
+configsRouter.post('/', authenticateSupabaseUser, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const db = await getDb();
   try {
     const { name, type, config } = req.body;
-    const id = uuidv4();
+    const configId = uuidv4();
 
+    // Create config in promptfoo database
     const [result] = await db
       .insert(configsTable)
       .values({
-        id,
+        id: configId,
         name,
-        type,
+        type: type || 'redteam',
         config,
       })
       .returning({
@@ -57,7 +84,25 @@ configsRouter.post('/', async (req: Request, res: Response): Promise<void> => {
         createdAt: configsTable.createdAt,
       });
 
-    logger.info(`Saved config ${id} of type ${type}`);
+    // Create user mapping in Supabase
+    const { error: mappingError } = await supabase
+      .from('user_configs')
+      .insert({
+        user_id: req.user!.id,
+        config_id: configId,
+        config_type: type || 'redteam',
+        config_name: name
+      });
+    
+    if (mappingError) {
+      // If mapping fails, clean up the config
+      await db.delete(configsTable).where(eq(configsTable.id, configId));
+      logger.error(`Error creating user config mapping: ${mappingError.message}`);
+      res.status(500).json({ error: 'Failed to create config mapping' });
+      return;
+    }
+
+    logger.info(`Saved config ${configId} of type ${type || 'redteam'} for user ${req.user!.email}`);
 
     res.json(result);
   } catch (error) {
@@ -66,21 +111,51 @@ configsRouter.post('/', async (req: Request, res: Response): Promise<void> => {
   }
 });
 
-configsRouter.get('/:type', async (req: Request, res: Response): Promise<void> => {
+configsRouter.get('/:type', authenticateSupabaseUser, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const db = await getDb();
   try {
+    const type = req.params.type;
+    
+    // Get user's config IDs from Supabase mapping table
+    const { data: userConfigMappings, error: mappingError } = await supabase
+      .from('user_configs')
+      .select('config_id')
+      .eq('user_id', req.user!.id)
+      .eq('config_type', type);
+    
+    if (mappingError) {
+      logger.error(`Error fetching user config mappings: ${mappingError.message}`);
+      res.status(500).json({ error: 'Failed to fetch user configs' });
+      return;
+    }
+    
+    const userConfigIds = userConfigMappings?.map(mapping => mapping.config_id) || [];
+    
+    // If user has no configs, return empty array
+    if (userConfigIds.length === 0) {
+      res.json({ configs: [] });
+      return;
+    }
+    
+    // Query promptfoo configs table filtered by user's config IDs
     const configs = await db
       .select({
         id: configsTable.id,
         name: configsTable.name,
         createdAt: configsTable.createdAt,
         updatedAt: configsTable.updatedAt,
+        config: configsTable.config,
       })
       .from(configsTable)
-      .where(eq(configsTable.type, req.params.type))
+      .where(
+        and(
+          eq(configsTable.type, type),
+          inArray(configsTable.id, userConfigIds)
+        )
+      )
       .orderBy(configsTable.updatedAt);
 
-    logger.info(`Loaded ${configs.length} configs of type ${req.params.type}`);
+    logger.info(`Loaded ${configs.length} configs of type ${type} for user ${req.user!.email}`);
 
     res.json({ configs });
   } catch (error) {
@@ -117,16 +192,33 @@ configsRouter.get('/templates/:tier', async (req: Request, res: Response): Promi
   }
 });
 
-configsRouter.get('/:type/:id', async (req: Request, res: Response): Promise<void> => {
+configsRouter.get('/:type/:id', authenticateSupabaseUser, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const db = await getDb();
   try {
+    const { type, id } = req.params;
+    
+    // First check if user owns this config
+    const { data: userConfigMapping, error: mappingError } = await supabase
+      .from('user_configs')
+      .select('config_id')
+      .eq('user_id', req.user!.id)
+      .eq('config_id', id)
+      .eq('config_type', type)
+      .single();
+    
+    if (mappingError || !userConfigMapping) {
+      res.status(404).json({ error: 'Config not found or access denied' });
+      return;
+    }
+    
+    // User owns the config, fetch it from promptfoo database
     const config = await db
       .select()
       .from(configsTable)
-      .where(and(eq(configsTable.type, req.params.type), eq(configsTable.id, req.params.id)))
+      .where(and(eq(configsTable.type, type), eq(configsTable.id, id)))
       .limit(1);
 
-    logger.info(`Loaded config ${req.params.id} of type ${req.params.type}`);
+    logger.info(`Loaded config ${id} of type ${type} for user ${req.user!.email}`);
 
     if (!config.length) {
       res.status(404).json({ error: 'Config not found' });
@@ -140,20 +232,49 @@ configsRouter.get('/:type/:id', async (req: Request, res: Response): Promise<voi
   }
 });
 
-configsRouter.delete('/:type/:id', async (req: Request, res: Response): Promise<void> => {
+configsRouter.delete('/:type/:id', authenticateSupabaseUser, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const db = await getDb();
   try {
+    const { type, id } = req.params;
+    
+    // First check if user owns this config
+    const { data: userConfigMapping, error: mappingError } = await supabase
+      .from('user_configs')
+      .select('config_id')
+      .eq('user_id', req.user!.id)
+      .eq('config_id', id)
+      .eq('config_type', type)
+      .single();
+    
+    if (mappingError || !userConfigMapping) {
+      res.status(404).json({ error: 'Config not found or access denied' });
+      return;
+    }
+    
+    // Delete from promptfoo database
     const result = await db
       .delete(configsTable)
-      .where(and(eq(configsTable.type, req.params.type), eq(configsTable.id, req.params.id)))
+      .where(and(eq(configsTable.type, type), eq(configsTable.id, id)))
       .returning({ id: configsTable.id });
 
     if (result.length === 0) {
       res.status(404).json({ error: 'Config not found' });
       return;
     }
+    
+    // Delete the user mapping from Supabase
+    const { error: deleteMappingError } = await supabase
+      .from('user_configs')
+      .delete()
+      .eq('user_id', req.user!.id)
+      .eq('config_id', id);
+    
+    if (deleteMappingError) {
+      logger.warn(`Failed to delete user config mapping: ${deleteMappingError.message}`);
+      // Continue anyway since the config is deleted
+    }
 
-    logger.info(`Deleted config ${req.params.id} of type ${req.params.type}`);
+    logger.info(`Deleted config ${id} of type ${type} for user ${req.user!.email}`);
     res.json({ success: true, id: result[0].id });
   } catch (error) {
     logger.error(`Error deleting config: ${error}`);

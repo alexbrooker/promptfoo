@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@app/hooks/useToast';
-import { callApi } from '@app/utils/api';
+import { callAuthenticatedApi } from '@app/utils/api';
 import {
   Box,
   Container,
@@ -17,6 +17,9 @@ import {
   MenuItem,
   Alert,
   CircularProgress,
+  Collapse,
+  Tooltip,
+  Badge,
 } from '@mui/material';
 import {
   PlayArrow,
@@ -26,6 +29,10 @@ import {
   Security,
   Add,
   Download,
+  ExpandMore,
+  ExpandLess,
+  Policy,
+  Shield,
 } from '@mui/icons-material';
 import { generateOrderedYaml } from '../redteam/setup/utils/yamlHelpers';
 
@@ -42,6 +49,7 @@ export default function TestPlansPage() {
   const [testPlans, setTestPlans] = useState<TestPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [menuAnchor, setMenuAnchor] = useState<{ element: HTMLElement; planId: string } | null>(null);
+  const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
   const navigate = useNavigate();
   const toast = useToast();
 
@@ -52,7 +60,7 @@ export default function TestPlansPage() {
   const loadTestPlans = async () => {
     setLoading(true);
     try {
-      const response = await callApi('/configs?type=redteam');
+      const response = await callAuthenticatedApi('/configs?type=redteam');
       const data = await response.json();
 
       if (data.error) {
@@ -77,8 +85,8 @@ export default function TestPlansPage() {
   };
 
   const handleRunTestPlan = (planId: string) => {
-    // Navigate to setup page and load this config
-    navigate(`/redteam/setup?config=${planId}`);
+    // Navigate to quick-scan page and load this config
+    navigate(`/redteam/quick-scan?config=${planId}`);
   };
 
   const handleEditTestPlan = (planId: string) => {
@@ -88,7 +96,7 @@ export default function TestPlansPage() {
 
   const handleDeleteTestPlan = async (planId: string) => {
     try {
-      const response = await callApi(`/configs/redteam/${planId}`, {
+      const response = await callAuthenticatedApi(`/configs/redteam/${planId}`, {
         method: 'DELETE',
       });
 
@@ -136,15 +144,79 @@ export default function TestPlansPage() {
   };
 
   const getPluginCount = (config: any) => {
-    return config?.plugins?.length || 0;
+    if (!config?.plugins) return 0;
+    return Array.isArray(config.plugins) ? config.plugins.length : 0;
   };
 
   const getStrategyCount = (config: any) => {
-    return config?.strategies?.length || 0;
+    if (!config?.strategies) return 0;
+    return Array.isArray(config.strategies) ? config.strategies.length : 0;
   };
 
   const getTargetType = (config: any) => {
     return config?.target?.id || 'Unknown';
+  };
+
+  const getTargetUrl = (config: any) => {
+    return config?.target?.config?.url || null;
+  };
+
+  const getDescription = (config: any) => {
+    return config?.description || '';
+  };
+
+  const toggleCardExpansion = (planId: string) => {
+    setExpandedCards(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(planId)) {
+        newSet.delete(planId);
+      } else {
+        newSet.add(planId);
+      }
+      return newSet;
+    });
+  };
+
+  const getFrameworks = (config: any) => {
+    const frameworks = [];
+    const plugins = config?.plugins || [];
+    const strategies = config?.strategies || [];
+    
+    // OWASP LLM indicators
+    const owaspLlmPlugins = ['prompt-extraction', 'harmful', 'pii', 'excessive-agency', 'ascii-smuggling', 'indirect-prompt-injection'];
+    const owaspLlmStrategies = ['jailbreak', 'prompt-injection'];
+    
+    // MITRE ATLAS indicators  
+    const mitreAtlasPlugins = ['shell-injection', 'sql-injection', 'ssrf', 'debug-access', 'competitors', 'hijacking'];
+    
+    const hasOwaspLlm = plugins.some((p: any) => {
+      const pluginId = typeof p === 'string' ? p : p.id;
+      return owaspLlmPlugins.some(owaspPlugin => pluginId?.includes(owaspPlugin));
+    }) || strategies.some((s: string) => owaspLlmStrategies.includes(s));
+    
+    const hasMitreAtlas = plugins.some((p: any) => {
+      const pluginId = typeof p === 'string' ? p : p.id;
+      return mitreAtlasPlugins.some(mitrePlugin => pluginId?.includes(mitrePlugin));
+    });
+    
+    if (hasOwaspLlm) frameworks.push('OWASP LLM Top 10');
+    if (hasMitreAtlas) frameworks.push('MITRE ATLAS');
+    
+    return frameworks;
+  };
+
+  const getPluginNames = (config: any) => {
+    const plugins = config?.plugins || [];
+    return plugins.map((p: any) => {
+      if (typeof p === 'string') return p;
+      if (typeof p === 'object' && p?.id) return p.id;
+      return 'Unknown';
+    }).filter(Boolean);
+  };
+
+  const getStrategyNames = (config: any) => {
+    const strategies = config?.strategies || [];
+    return strategies.filter((s: any) => typeof s === 'string' && s.length > 0);
   };
 
   if (loading) {
@@ -231,17 +303,116 @@ export default function TestPlansPage() {
                       label={`${getPluginCount(plan.config)} plugins`}
                       size="small"
                       variant="outlined"
+                      color={getPluginCount(plan.config) > 0 ? 'primary' : 'default'}
                     />
                     <Chip
                       label={`${getStrategyCount(plan.config)} strategies`}
                       size="small"
                       variant="outlined"
+                      color={getStrategyCount(plan.config) > 0 ? 'secondary' : 'default'}
                     />
+                    {getFrameworks(plan.config).map((framework) => (
+                      <Chip
+                        key={framework}
+                        icon={<Shield />}
+                        label={framework}
+                        size="small"
+                        variant="filled"
+                        color={framework.includes('OWASP') ? 'warning' : 'info'}
+                        sx={{ fontWeight: 'bold' }}
+                      />
+                    ))}
                   </Box>
+
+                  {getDescription(plan.config) && (
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1, fontStyle: 'italic' }}>
+                      {getDescription(plan.config)}
+                    </Typography>
+                  )}
 
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                     Target: {getTargetType(plan.config)}
                   </Typography>
+
+                  {getTargetUrl(plan.config) && (
+                    <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+                      URL: {getTargetUrl(plan.config)}
+                    </Typography>
+                  )}
+
+                  {(getPluginCount(plan.config) > 0 || getStrategyCount(plan.config) > 0) && (
+                    <Box sx={{ mt: 1, mb: 1 }}>
+                      <Button
+                        size="small"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleCardExpansion(plan.id);
+                        }}
+                        endIcon={expandedCards.has(plan.id) ? <ExpandLess /> : <ExpandMore />}
+                        sx={{ p: 0, minWidth: 'auto', fontSize: '0.75rem' }}
+                      >
+                        {expandedCards.has(plan.id) ? 'Hide' : 'Show'} Details
+                      </Button>
+                      
+                      <Collapse in={expandedCards.has(plan.id)}>
+                        <Box sx={{ mt: 1, p: 1, bgcolor: 'grey.50', borderRadius: 1 }}>
+                          {getPluginCount(plan.config) > 0 && (
+                            <Box sx={{ mb: 1 }}>
+                              <Typography variant="caption" sx={{ fontWeight: 'bold', display: 'block' }}>
+                                Plugins ({getPluginCount(plan.config)}):
+                              </Typography>
+                              <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 0.5 }}>
+                                {getPluginNames(plan.config).slice(0, 10).map((plugin, idx) => {
+                                  const displayName = String(plugin);
+                                  return (
+                                    <Tooltip key={`${plan.id}-plugin-${idx}`} title={displayName}>
+                                      <Chip
+                                        label={displayName.length > 15 ? displayName.slice(0, 15) + '...' : displayName}
+                                        size="small"
+                                        variant="outlined"
+                                        sx={{ fontSize: '0.7rem', height: '20px' }}
+                                      />
+                                    </Tooltip>
+                                  );
+                                })}
+                                {getPluginNames(plan.config).length > 10 && (
+                                  <Chip
+                                    label={`+${getPluginNames(plan.config).length - 10} more`}
+                                    size="small"
+                                    variant="outlined"
+                                    sx={{ fontSize: '0.7rem', height: '20px' }}
+                                  />
+                                )}
+                              </Box>
+                            </Box>
+                          )}
+                          
+                          {getStrategyCount(plan.config) > 0 && (
+                            <Box>
+                              <Typography variant="caption" sx={{ fontWeight: 'bold', display: 'block' }}>
+                                Strategies ({getStrategyCount(plan.config)}):
+                              </Typography>
+                              <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 0.5 }}>
+                                {getStrategyNames(plan.config).map((strategy, idx) => {
+                                  const displayName = String(strategy);
+                                  return (
+                                    <Chip
+                                      key={`${plan.id}-strategy-${idx}`}
+                                      label={displayName}
+                                      size="small"
+                                      variant="filled"
+                                      color="secondary"
+                                      sx={{ fontSize: '0.7rem', height: '20px' }}
+                                    />
+                                  );
+                                })}
+                              </Box>
+                            </Box>
+                          )}
+                        </Box>
+                      </Collapse>
+                    </Box>
+                  )}
 
                   <Typography variant="caption" color="text.secondary">
                     Updated: {new Date(plan.updatedAt).toLocaleDateString()}

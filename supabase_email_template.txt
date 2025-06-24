@@ -1,0 +1,41 @@
+🛡️ AI Security Platform
+Professional AI Red Teaming & Vulnerability Assessment
+
+========================================
+
+Welcome to AI Security Testing!
+
+You're one step away from accessing professional AI red teaming tools and comprehensive security reports.
+
+VERIFY YOUR EMAIL ADDRESS
+{{ .ConfirmationURL }}
+
+This link expires in 24 hours for security.
+
+========================================
+
+What you'll get access to:
+
+🎯 Custom Test Plans
+   AI-specific security tests tailored to your system
+
+📋 Compliance Reports  
+   OWASP LLM, MITRE ATLAS, NIST AI RMF coverage
+
+🔍 Vulnerability Detection
+   Automated discovery of AI security issues
+
+📊 Professional Reports
+   Detailed findings for your security team
+
+========================================
+
+🔒 Security Notice
+We never ask for passwords via email. If you didn't create this account, you can safely ignore this email.
+
+========================================
+
+Need help? Contact us at support@yourplatform.com
+
+© 2024 AI Security Platform
+Professional AI Red Teaming Solutions

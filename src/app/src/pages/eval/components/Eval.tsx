@@ -3,7 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { IS_RUNNING_LOCALLY } from '@app/constants';
 import { ShiftKeyProvider } from '@app/contexts/ShiftKeyContext';
 import useApiConfig from '@app/stores/apiConfig';
-import { callApi } from '@app/utils/api';
+import { callAuthenticatedApi } from '@app/utils/api';
 import CircularProgress from '@mui/material/CircularProgress';
 import type { SharedResults, ResultLightweightWithLabel } from '@promptfoo/types';
 import { io as SocketIOClient } from 'socket.io-client';
@@ -48,7 +48,7 @@ export default function Eval({
   );
 
   const fetchRecentFileEvals = async () => {
-    const resp = await callApi(`/results`, { cache: 'no-store' });
+    const resp = await callAuthenticatedApi(`/eval/results`, { cache: 'no-store' });
     if (!resp.ok) {
       setFailed(true);
       return;

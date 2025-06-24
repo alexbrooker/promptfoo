@@ -330,23 +330,20 @@ export default function Targets({ onNext, onBack, setupModalOpen }: TargetsProps
   };
 
   return (
-    <Stack direction="column" spacing={3}>
-      <Typography variant="h4" gutterBottom sx={{ fontWeight: 'bold', mb: 3 }}>
-        Select Red Team Target
-      </Typography>
+    <Box sx={{ maxWidth: '800px', margin: '0 auto' }}>
+      <Stack direction="column" spacing={3}>
+        <Typography variant="h4" gutterBottom sx={{ fontWeight: 'bold', mb: 3 }}>
+          Select Red Team Target
+        </Typography>
 
       <Typography variant="body1">
         A target is the specific LLM or endpoint you want to evaluate in your red teaming process.
-        In Promptfoo targets are also known as providers. You can configure additional targets
+        Targets are also known as providers. You can configure additional targets
         later.
       </Typography>
 
       <Typography variant="body1">
-        For more information on available providers and how to configure them, please visit our{' '}
-        <Link href="https://www.promptfoo.dev/docs/providers/" target="_blank" rel="noopener">
-          provider documentation
-        </Link>
-        .
+        Configure your target endpoint or LLM provider below. You can test the connection before proceeding.
       </Typography>
 
       <Box mb={4}>
@@ -410,28 +407,12 @@ export default function Targets({ onNext, onBack, setupModalOpen }: TargetsProps
           <>
             {selectedTarget.id.endsWith('.js') && (
               <Typography variant="body1" sx={{ mt: 1 }}>
-                Learn how to set up a custom JavaScript provider{' '}
-                <Link
-                  href="https://www.promptfoo.dev/docs/providers/custom-api/"
-                  target="_blank"
-                  rel="noopener"
-                >
-                  here
-                </Link>
-                .
+                Custom JavaScript providers allow you to implement custom logic for your target.
               </Typography>
             )}
             {selectedTarget.id.endsWith('.py') && (
               <Typography variant="body1" sx={{ mt: 1 }}>
-                Learn how to set up a custom Python provider{' '}
-                <Link
-                  href="https://www.promptfoo.dev/docs/providers/python/"
-                  target="_blank"
-                  rel="noopener"
-                >
-                  here
-                </Link>
-                .
+                Custom Python providers allow you to implement custom logic for your target.
               </Typography>
             )}
           </>
@@ -554,5 +535,6 @@ export default function Targets({ onNext, onBack, setupModalOpen }: TargetsProps
         </Button>
       </Box>
     </Stack>
+    </Box>
   );
 }

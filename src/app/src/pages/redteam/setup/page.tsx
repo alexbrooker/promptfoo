@@ -4,7 +4,7 @@ import CrispChat from '@app/components/CrispChat';
 import ErrorBoundary from '@app/components/ErrorBoundary';
 import { useTelemetry } from '@app/hooks/useTelemetry';
 import { useToast } from '@app/hooks/useToast';
-import { callApi } from '@app/utils/api';
+import { callAuthenticatedApi } from '@app/utils/api';
 import AppIcon from '@mui/icons-material/Apps';
 import TemplateIcon from '@mui/icons-material/Assignment';
 import DownloadIcon from '@mui/icons-material/Download';
@@ -267,7 +267,7 @@ export default function RedTeamSetupPage() {
 
   const { hasSeenSetup, markSetupAsSeen } = useSetupState();
   const [setupModalOpen, setSetupModalOpen] = useState(!hasSeenSetup);
-  const { config, setFullConfig, resetConfig } = useRedTeamConfig();
+  const { config, setFullConfig, resetConfig, loadConfig, setConfigId } = useRedTeamConfig();
 
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [loadDialogOpen, setLoadDialogOpen] = useState(false);
@@ -378,7 +378,7 @@ export default function RedTeamSetupPage() {
       targetType: config.target.id,
     });
     try {
-      const response = await callApi('/configs', {
+      const response = await callAuthenticatedApi('/configs', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -415,7 +415,7 @@ export default function RedTeamSetupPage() {
   const loadConfigs = async () => {
     recordEvent('feature_used', { feature: 'redteam_config_load' });
     try {
-      const response = await callApi('/configs?type=redteam');
+      const response = await callAuthenticatedApi('/configs?type=redteam');
       const data = await response.json();
 
       if (data.error) {
@@ -442,20 +442,19 @@ export default function RedTeamSetupPage() {
 
   const handleLoadConfig = async (id: string) => {
     try {
-      const response = await callApi(`/configs/redteam/${id}`);
+      await loadConfig(id);
+      setConfigId(id);
+      
+      // Get the loaded config details for UI state
+      const response = await callAuthenticatedApi(`/configs/redteam/${id}`);
       const data = await response.json();
-
-      if (data.error) {
-        throw new Error(data.error);
-      }
-
-      setFullConfig(data.config);
+      
       setConfigName(data.name);
       setConfigDate(data.updatedAt);
       lastSavedConfig.current = JSON.stringify(data.config);
       setHasUnsavedChanges(false);
 
-      toast.showToast('Configuration loaded successfully', 'success');
+      toast.showToast('Test plan loaded successfully', 'success');
       setLoadDialogOpen(false);
     } catch (error) {
       console.error('Failed to load configuration', error);

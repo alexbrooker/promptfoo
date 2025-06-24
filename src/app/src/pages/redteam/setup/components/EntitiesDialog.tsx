@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { callApi } from '@app/utils/api';
+import { callAuthenticatedApi } from '@app/utils/api';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import Box from '@mui/material/Box';
@@ -44,7 +44,7 @@ export default function EntitiesDialog({
 
   const debouncedUpdateEntities = useDebouncedCallback(async (prompts: string[]) => {
     try {
-      const response = await callApi('/redteam/entities', {
+      const response = await callAuthenticatedApi('/redteam/entities', {
         method: 'POST',
         body: JSON.stringify({ prompts }),
       });

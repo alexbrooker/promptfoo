@@ -18,6 +18,7 @@ import {
   Chip,
   FormHelperText,
   Avatar,
+  Stack,
 } from '@mui/material';
 import {
   Person,
@@ -27,6 +28,22 @@ import {
   Refresh,
 } from '@mui/icons-material';
 import { useUserStore } from '@app/stores/userStore';
+
+const AI_ROLES = [
+  'Customer Support',
+  'Sales Assistant', 
+  'Content Generation',
+  'Data Analysis',
+  'Research Assistant',
+  'Code Assistant',
+  'Healthcare Assistant',
+  'Financial Advisor',
+  'Legal Assistant',
+  'Government AI',
+  'Educational Tutor',
+  'HR Assistant',
+  'Other',
+];
 
 const INDUSTRIES = [
   'Technology',
@@ -39,20 +56,22 @@ const INDUSTRIES = [
   'Media & Entertainment',
   'Transportation',
   'Energy',
+  'Real Estate',
+  'Legal Services',
   'Other',
 ];
 
 const USE_CASES = [
-  'Customer Support Chatbot',
-  'Internal Knowledge Assistant', 
-  'Content Generation',
-  'Code Assistant',
-  'Data Analysis',
-  'Educational Tutor',
-  'Healthcare Assistant',
-  'Legal Document Review',
-  'HR Assistant',
-  'Sales Assistant',
+  'Answer customer questions',
+  'Process customer support tickets',
+  'Generate marketing content',
+  'Analyze business data',
+  'Research and summarization',
+  'Write code and documentation',
+  'Process sensitive information',
+  'Provide specialized advice',
+  'Ensure regulatory compliance',
+  'Custom security assessment',
   'Other',
 ];
 
@@ -94,9 +113,9 @@ export default function SettingsPage() {
   const [formData, setFormData] = useState({
     name: '',
     company: '',
-    chatbotRole: '',
-    industry: '',
-    useCase: '',
+    chatbotRole: [] as string[],
+    industry: [] as string[],
+    useCase: [] as string[],
     complianceNeeds: [] as string[],
     countryOfOperation: '',
   });
@@ -116,9 +135,9 @@ export default function SettingsPage() {
     setFormData({
       name: onboardingData.name || '',
       company: onboardingData.company || '',
-      chatbotRole: onboardingData.chatbotRole || '',
-      industry: onboardingData.industry || '',
-      useCase: onboardingData.useCase || '',
+      chatbotRole: Array.isArray(onboardingData.chatbotRole) ? onboardingData.chatbotRole : (onboardingData.chatbotRole ? [onboardingData.chatbotRole] : []),
+      industry: Array.isArray(onboardingData.industry) ? onboardingData.industry : (onboardingData.industry ? [onboardingData.industry] : []),
+      useCase: Array.isArray(onboardingData.useCase) ? onboardingData.useCase : (onboardingData.useCase ? [onboardingData.useCase] : []),
       complianceNeeds: onboardingData.complianceNeeds || [],
       countryOfOperation: onboardingData.countryOfOperation || '',
     });
@@ -154,6 +173,14 @@ export default function SettingsPage() {
     handleInputChange('complianceNeeds', value);
   };
 
+  const handleChipToggle = (field: 'chatbotRole' | 'industry' | 'useCase', value: string) => {
+    const currentValues = formData[field] as string[];
+    const newValues = currentValues.includes(value)
+      ? currentValues.filter(item => item !== value)
+      : [...currentValues, value];
+    handleInputChange(field, newValues);
+  };
+
   const handleSave = async () => {
     setLoading(true);
     setError(null);
@@ -179,9 +206,9 @@ export default function SettingsPage() {
     setFormData({
       name: onboardingData.name || '',
       company: onboardingData.company || '',
-      chatbotRole: onboardingData.chatbotRole || '',
-      industry: onboardingData.industry || '',
-      useCase: onboardingData.useCase || '',
+      chatbotRole: Array.isArray(onboardingData.chatbotRole) ? onboardingData.chatbotRole : (onboardingData.chatbotRole ? [onboardingData.chatbotRole] : []),
+      industry: Array.isArray(onboardingData.industry) ? onboardingData.industry : (onboardingData.industry ? [onboardingData.industry] : []),
+      useCase: Array.isArray(onboardingData.useCase) ? onboardingData.useCase : (onboardingData.useCase ? [onboardingData.useCase] : []),
       complianceNeeds: onboardingData.complianceNeeds || [],
       countryOfOperation: onboardingData.countryOfOperation || '',
     });
@@ -284,48 +311,93 @@ export default function SettingsPage() {
           
           <Grid container spacing={3}>
             <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="AI System Role"
-                value={formData.chatbotRole}
-                onChange={(e) => handleInputChange('chatbotRole', e.target.value)}
-                placeholder="e.g., Customer Support Assistant, Code Helper"
-                helperText="Describe the primary role of your AI system"
-              />
+              <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 'bold' }}>
+                AI System Role
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Select all roles that describe your AI system
+              </Typography>
+              <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
+                {AI_ROLES.map((role) => (
+                  <Chip
+                    key={role}
+                    label={role}
+                    onClick={() => handleChipToggle('chatbotRole', role)}
+                    sx={{
+                      backgroundColor: formData.chatbotRole.includes(role) ? 'primary.main' : 'transparent',
+                      border: `2px solid ${formData.chatbotRole.includes(role) ? 'primary.main' : '#e0e0e0'}`,
+                      color: formData.chatbotRole.includes(role) ? 'white' : 'inherit',
+                      fontWeight: formData.chatbotRole.includes(role) ? 'bold' : 'normal',
+                      '&:hover': {
+                        backgroundColor: 'primary.main',
+                        color: 'white',
+                        opacity: 0.8,
+                      },
+                    }}
+                    clickable
+                  />
+                ))}
+              </Stack>
             </Grid>
             
             <Grid item xs={12} sm={6}>
-              <FormControl fullWidth>
-                <InputLabel>Industry</InputLabel>
-                <Select
-                  value={formData.industry}
-                  label="Industry"
-                  onChange={(e) => handleInputChange('industry', e.target.value)}
-                >
-                  {INDUSTRIES.map((industry) => (
-                    <MenuItem key={industry} value={industry}>
-                      {industry}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 'bold' }}>
+                Industry
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Select all applicable industries
+              </Typography>
+              <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
+                {INDUSTRIES.map((industry) => (
+                  <Chip
+                    key={industry}
+                    label={industry}
+                    onClick={() => handleChipToggle('industry', industry)}
+                    sx={{
+                      backgroundColor: formData.industry.includes(industry) ? 'secondary.main' : 'transparent',
+                      border: `2px solid ${formData.industry.includes(industry) ? 'secondary.main' : '#e0e0e0'}`,
+                      color: formData.industry.includes(industry) ? 'white' : 'inherit',
+                      fontWeight: formData.industry.includes(industry) ? 'bold' : 'normal',
+                      '&:hover': {
+                        backgroundColor: 'secondary.main',
+                        color: 'white',
+                        opacity: 0.8,
+                      },
+                    }}
+                    clickable
+                  />
+                ))}
+              </Stack>
             </Grid>
             
             <Grid item xs={12} sm={6}>
-              <FormControl fullWidth>
-                <InputLabel>Primary Use Case</InputLabel>
-                <Select
-                  value={formData.useCase}
-                  label="Primary Use Case"
-                  onChange={(e) => handleInputChange('useCase', e.target.value)}
-                >
-                  {USE_CASES.map((useCase) => (
-                    <MenuItem key={useCase} value={useCase}>
-                      {useCase}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 'bold' }}>
+                Primary Use Cases
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Select all applicable use cases
+              </Typography>
+              <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
+                {USE_CASES.map((useCase) => (
+                  <Chip
+                    key={useCase}
+                    label={useCase}
+                    onClick={() => handleChipToggle('useCase', useCase)}
+                    sx={{
+                      backgroundColor: formData.useCase.includes(useCase) ? 'info.main' : 'transparent',
+                      border: `2px solid ${formData.useCase.includes(useCase) ? 'info.main' : '#e0e0e0'}`,
+                      color: formData.useCase.includes(useCase) ? 'white' : 'inherit',
+                      fontWeight: formData.useCase.includes(useCase) ? 'bold' : 'normal',
+                      '&:hover': {
+                        backgroundColor: 'info.main',
+                        color: 'white',
+                        opacity: 0.8,
+                      },
+                    }}
+                    clickable
+                  />
+                ))}
+              </Stack>
             </Grid>
           </Grid>
         </CardContent>

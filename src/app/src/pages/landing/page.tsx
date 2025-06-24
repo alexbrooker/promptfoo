@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -8,12 +8,15 @@ import {
   Grid,
   Card,
   CardContent,
+  CardActions,
   List,
   ListItem,
   ListItemIcon,
   ListItemText,
   Chip,
   Paper,
+  CircularProgress,
+  Alert,
 } from '@mui/material';
 import {
   Security,
@@ -24,80 +27,138 @@ import {
   Shield,
   Verified,
   TrendingUp,
+  Add,
 } from '@mui/icons-material';
+import { useUserStore } from '@app/stores/userStore';
+import { callAuthenticatedApi } from '@app/utils/api';
+import { useToast } from '@app/hooks/useToast';
+import { 
+  OWASP_LLM_TOP_10_MAPPING, 
+  MITRE_ATLAS_MAPPING, 
+  EU_AI_ACT_MAPPING,
+  NIST_AI_RMF_MAPPING,
+  FRAMEWORK_NAMES 
+} from '../../../../redteam/constants/frameworks';
+
+interface TestPlan {
+  id: string;
+  name: string;
+  type: string;
+  config: any;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export default function LandingPage() {
   const navigate = useNavigate();
+  const { user, onboardingData } = useUserStore();
+  const toast = useToast();
+  const [testPlans, setTestPlans] = useState<TestPlan[]>([]);
+  const [loadingPlans, setLoadingPlans] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      loadUserTestPlans();
+    }
+  }, [user]);
+
+  const loadUserTestPlans = async () => {
+    setLoadingPlans(true);
+    try {
+      const response = await callAuthenticatedApi('/configs?type=redteam');
+      const data = await response.json();
+
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      // Sort by most recent first
+      const sortedPlans = data.configs.sort(
+        (a: TestPlan, b: TestPlan) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+      );
+
+      setTestPlans(sortedPlans);
+    } catch (error) {
+      console.error('Failed to load test plans:', error);
+    } finally {
+      setLoadingPlans(false);
+    }
+  };
+
+  const handleRunTestPlan = (planId: string) => {
+    navigate(`/redteam/quick-scan?config=${planId}`);
+  };
+
+  const getFrameworks = (config: any) => {
+    const frameworks = new Set<string>();
+    const plugins = config?.plugins || [];
+    const strategies = config?.strategies || [];
+    
+    // Check against all framework mappings
+    const allMappings = {
+      ...OWASP_LLM_TOP_10_MAPPING,
+      ...MITRE_ATLAS_MAPPING,
+      ...EU_AI_ACT_MAPPING,
+      ...NIST_AI_RMF_MAPPING,
+    };
+
+    Object.entries(allMappings).forEach(([frameworkKey, mapping]) => {
+      const hasMatchingPlugin = plugins.some((p: any) => {
+        const pluginId = typeof p === 'string' ? p : p.id;
+        return mapping.plugins.includes(pluginId);
+      });
+      
+      const hasMatchingStrategy = strategies.some((s: string) => 
+        mapping.strategies.includes(s)
+      );
+
+      if (hasMatchingPlugin || hasMatchingStrategy) {
+        // Map framework key to display name
+        if (frameworkKey.startsWith('owasp:llm')) {
+          frameworks.add(FRAMEWORK_NAMES['owasp:llm']);
+        } else if (frameworkKey.startsWith('mitre:atlas')) {
+          frameworks.add(FRAMEWORK_NAMES['mitre:atlas']);
+        } else if (frameworkKey.startsWith('eu:ai-act')) {
+          frameworks.add(FRAMEWORK_NAMES['eu:ai-act']);
+        } else if (frameworkKey.startsWith('nist:ai')) {
+          frameworks.add(FRAMEWORK_NAMES['nist:ai:measure']);
+        } else if (frameworkKey.startsWith('owasp:api')) {
+          frameworks.add(FRAMEWORK_NAMES['owasp:api']);
+        }
+      }
+    });
+    
+    return Array.from(frameworks);
+  };
+
+  const getPluginCount = (config: any) => {
+    if (!config?.plugins) return 0;
+    return Array.isArray(config.plugins) ? config.plugins.length : 0;
+  };
+
+  const getStrategyCount = (config: any) => {
+    if (!config?.strategies) return 0;
+    return Array.isArray(config.strategies) ? config.strategies.length : 0;
+  };
 
   const features = [
     {
       icon: Shield,
-      title: 'OWASP LLM Top 10 Coverage',
-      description: 'Complete assessment against the most critical AI security risks',
+      title: 'Comprehensive Red Teaming',
+      description: 'Automated testing against OWASP LLM Top 10, MITRE ATLAS, and other security frameworks',
     },
     {
       icon: Verified,
-      title: 'EU AI Act Compliance',
-      description: 'Ensure your AI systems meet regulatory requirements',
+      title: 'Detailed Vulnerability Reports',
+      description: 'Professional security reports with findings, risk ratings, and remediation guidance',
     },
     {
       icon: TrendingUp,
-      title: 'MITRE ATLAS Framework',
-      description: 'Advanced adversarial testing based on industry standards',
+      title: 'Compliance Documentation',
+      description: 'Generate compliance reports for NIST AI RMF, EU AI Act, and industry standards',
     },
   ];
 
-  const pricingPlans = [
-    {
-      name: 'Quick Check',
-      price: '$49',
-      description: 'Essential security assessment',
-      tests: '~100 tests',
-      features: [
-        'OWASP LLM Top 10 coverage',
-        'Prompt injection detection',
-        'Basic compliance check',
-        'Professional security report',
-        'Email delivery',
-      ],
-      icon: Speed,
-      color: 'primary' as const,
-      popular: true,
-    },
-    {
-      name: 'Business Scan',
-      price: '$499',
-      originalPrice: '$999',
-      description: 'Comprehensive security analysis',
-      tests: '~2000 tests',
-      features: [
-        'Everything in Quick Check',
-        'MITRE ATLAS coverage',
-        'EU AI Act compliance',
-        'Advanced adversarial testing',
-        'Executive summary report',
-        'Priority email support',
-      ],
-      icon: Business,
-      color: 'secondary' as const,
-    },
-    {
-      name: 'Monthly Monitoring',
-      price: '$750',
-      interval: '/month',
-      description: 'Continuous security monitoring',
-      tests: 'Automated scans',
-      features: [
-        'Everything in Business Scan',
-        'Automated monthly scans',
-        'Email report delivery',
-        'Continuous monitoring',
-        'Priority support',
-      ],
-      icon: Security,
-      color: 'success' as const,
-    },
-  ];
 
   return (
     <Box>
@@ -105,32 +166,160 @@ export default function LandingPage() {
       <Container maxWidth="lg" sx={{ py: 8 }}>
         <Box textAlign="center" sx={{ mb: 6 }}>
           <Typography variant="h2" component="h1" gutterBottom sx={{ fontWeight: 'bold' }}>
-            Secure Your AI in Minutes
+            AI Red Teaming & Security Testing Platform
           </Typography>
           <Typography variant="h5" color="text.secondary" sx={{ mb: 4, maxWidth: '800px', mx: 'auto' }}>
-            Professional AI security testing with comprehensive vulnerability assessment. 
-            Get instant compliance reports for OWASP LLM Top 10, MITRE ATLAS, and EU AI Act.
+            Professional red teaming platform for GenAI and LLM systems. Generate comprehensive 
+            vulnerability assessments and compliance reports to help your team secure AI applications.
           </Typography>
-          <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <Button
-              variant="contained"
-              size="large"
-              onClick={() => navigate('/redteam/setup')}
-              startIcon={<PlayArrow />}
-              sx={{ px: 4, py: 1.5, fontSize: '1.1rem' }}
-            >
-              Start Free Security Assessment
-            </Button>
-            <Button
-              variant="outlined"
-              size="large"
-              onClick={() => navigate('/test-plans')}
-              sx={{ px: 4, py: 1.5 }}
-            >
-              View Test Plans
-            </Button>
-          </Box>
+          <Typography variant="body1" color="text.secondary" sx={{ maxWidth: '600px', mx: 'auto' }}>
+            Run security tests against OWASP LLM Top 10, MITRE ATLAS, NIST AI RMF, and EU AI Act frameworks. 
+            Get detailed reports with findings and recommendations for your security team.
+          </Typography>
         </Box>
+
+        {/* User's Test Plans Section - Only show if authenticated */}
+        {user && (
+          <Box sx={{ mb: 8 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+              <Box>
+                <Typography variant="h4" gutterBottom sx={{ fontWeight: 'bold' }}>
+                  Your Security Test Plans
+                </Typography>
+                <Typography variant="body1" color="text.secondary">
+                  Ready-to-run security assessments tailored for your AI systems
+                </Typography>
+              </Box>
+              <Button
+                variant="outlined"
+                startIcon={<Add />}
+                onClick={() => navigate('/redteam/setup')}
+                size="large"
+              >
+                Create New Plan
+              </Button>
+            </Box>
+
+            {loadingPlans ? (
+              <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
+                <CircularProgress />
+              </Box>
+            ) : testPlans.length === 0 ? (
+              <Alert severity="info" sx={{ mb: 4 }}>
+                <Typography variant="h6" gutterBottom>
+                  No test plans found
+                </Typography>
+                <Typography variant="body2" sx={{ mb: 2 }}>
+                  Create your first security test plan to get comprehensive AI security assessments.
+                </Typography>
+                <Button
+                  variant="outlined"
+                  startIcon={<Add />}
+                  onClick={() => navigate('/redteam/setup')}
+                >
+                  Create Your First Test Plan
+                </Button>
+              </Alert>
+            ) : (
+              <Grid container spacing={3}>
+                {testPlans.slice(0, 3).map((plan) => (
+                  <Grid item xs={12} sm={6} md={4} key={plan.id}>
+                    <Card 
+                      sx={{ 
+                        height: '100%', 
+                        display: 'flex', 
+                        flexDirection: 'column',
+                        cursor: 'pointer',
+                        transition: 'transform 0.2s, box-shadow 0.2s',
+                        '&:hover': {
+                          transform: 'translateY(-4px)',
+                          boxShadow: 6,
+                        },
+                      }}
+                      onClick={() => handleRunTestPlan(plan.id)}
+                    >
+                      <CardContent sx={{ flexGrow: 1 }}>
+                        <Typography variant="h6" component="h3" gutterBottom sx={{ fontWeight: 'bold' }}>
+                          {plan.name}
+                        </Typography>
+
+                        <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
+                          <Chip
+                            icon={<Security />}
+                            label={`${getPluginCount(plan.config)} plugins`}
+                            size="small"
+                            variant="outlined"
+                            color={getPluginCount(plan.config) > 0 ? 'primary' : 'default'}
+                          />
+                          <Chip
+                            label={`${getStrategyCount(plan.config)} strategies`}
+                            size="small"
+                            variant="outlined"
+                            color={getStrategyCount(plan.config) > 0 ? 'secondary' : 'default'}
+                          />
+                        </Box>
+
+                        <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
+                          {getFrameworks(plan.config).map((framework) => (
+                            <Chip
+                              key={framework}
+                              icon={<Shield />}
+                              label={framework}
+                              size="small"
+                              variant="filled"
+                              color={
+                                framework.includes('OWASP LLM') ? 'warning' : 
+                                framework.includes('MITRE') ? 'info' :
+                                framework.includes('EU AI') ? 'success' : 'secondary'
+                              }
+                              sx={{ fontWeight: 'bold', fontSize: '0.75rem' }}
+                            />
+                          ))}
+                        </Box>
+
+                        <Typography variant="caption" color="text.secondary">
+                          Updated: {new Date(plan.updatedAt).toLocaleDateString()}
+                        </Typography>
+                      </CardContent>
+
+                      <CardActions sx={{ px: 2, pb: 2 }}>
+                        <Button
+                          variant="contained"
+                          startIcon={<PlayArrow />}
+                          fullWidth
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRunTestPlan(plan.id);
+                          }}
+                          sx={{
+                            background: 'linear-gradient(45deg, #1976d2 30%, #42a5f5 90%)',
+                            '&:hover': {
+                              background: 'linear-gradient(45deg, #1565c0 30%, #1e88e5 90%)',
+                            },
+                          }}
+                        >
+                          Run Security Test
+                        </Button>
+                      </CardActions>
+                    </Card>
+                  </Grid>
+                ))}
+              </Grid>
+            )}
+
+            {testPlans.length > 3 && (
+              <Box sx={{ textAlign: 'center', mt: 3 }}>
+                <Button
+                  variant="outlined"
+                  onClick={() => navigate('/test-plans')}
+                  size="large"
+                >
+                  View All Test Plans ({testPlans.length})
+                </Button>
+              </Box>
+            )}
+          </Box>
+        )}
 
         {/* Features Grid */}
         <Grid container spacing={4} sx={{ mb: 8 }}>
@@ -153,137 +342,6 @@ export default function LandingPage() {
             );
           })}
         </Grid>
-      </Container>
-
-      {/* Pricing Section */}
-      <Box sx={{ bgcolor: 'grey.50', py: 8 }}>
-        <Container maxWidth="lg">
-          <Typography variant="h3" textAlign="center" gutterBottom sx={{ mb: 6 }}>
-            Choose Your Security Assessment
-          </Typography>
-          
-          <Grid container spacing={3} justifyContent="center">
-            {pricingPlans.map((plan, index) => {
-              const IconComponent = plan.icon;
-              return (
-                <Grid item xs={12} md={4} key={index}>
-                  <Card 
-                    sx={{ 
-                      height: '100%', 
-                      display: 'flex', 
-                      flexDirection: 'column',
-                      border: plan.popular ? '2px solid' : '1px solid',
-                      borderColor: plan.popular ? 'primary.main' : 'divider',
-                      position: 'relative',
-                    }}
-                  >
-                    {plan.popular && (
-                      <Chip
-                        label="Most Popular"
-                        color="primary"
-                        size="small"
-                        sx={{
-                          position: 'absolute',
-                          top: -10,
-                          left: '50%',
-                          transform: 'translateX(-50%)',
-                        }}
-                      />
-                    )}
-                    
-                    <CardContent sx={{ flexGrow: 1, p: 3, pt: plan.popular ? 4 : 3 }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                        <IconComponent color={plan.color} sx={{ mr: 1 }} />
-                        <Typography variant="h6" component="h3">
-                          {plan.name}
-                        </Typography>
-                      </Box>
-                      
-                      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 1 }}>
-                        <Typography variant="h4" color={plan.color}>
-                          {plan.price}
-                        </Typography>
-                        {plan.interval && (
-                          <Typography variant="body2" color="text.secondary">
-                            {plan.interval}
-                          </Typography>
-                        )}
-                        {plan.originalPrice && (
-                          <>
-                            <Typography variant="body2" color="text.secondary" sx={{ textDecoration: 'line-through' }}>
-                              {plan.originalPrice}
-                            </Typography>
-                            <Chip label="50% OFF" color="error" size="small" />
-                          </>
-                        )}
-                      </Box>
-                      
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        {plan.description}
-                      </Typography>
-                      
-                      <Chip 
-                        label={plan.tests} 
-                        size="small" 
-                        variant="outlined"
-                        color={plan.color}
-                        sx={{ mb: 2 }}
-                      />
-                      
-                      <List dense>
-                        {plan.features.map((feature, idx) => (
-                          <ListItem key={idx} sx={{ px: 0, py: 0.25 }}>
-                            <ListItemIcon sx={{ minWidth: 32 }}>
-                              <CheckCircle color="success" fontSize="small" />
-                            </ListItemIcon>
-                            <ListItemText
-                              primary={feature}
-                              primaryTypographyProps={{ variant: 'body2' }}
-                            />
-                          </ListItem>
-                        ))}
-                      </List>
-                    </CardContent>
-                    
-                    <Box sx={{ p: 3, pt: 0 }}>
-                      <Button
-                        variant={plan.popular ? 'contained' : 'outlined'}
-                        color={plan.color}
-                        fullWidth
-                        size="large"
-                        onClick={() => navigate('/redteam/setup')}
-                      >
-                        Get Started
-                      </Button>
-                    </Box>
-                  </Card>
-                </Grid>
-              );
-            })}
-          </Grid>
-        </Container>
-      </Box>
-
-      {/* CTA Section */}
-      <Container maxWidth="lg" sx={{ py: 8 }}>
-        <Paper elevation={2} sx={{ p: 6, textAlign: 'center' }}>
-          <Typography variant="h4" gutterBottom>
-            Start Your AI Security Assessment Today
-          </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ mb: 4, maxWidth: '600px', mx: 'auto' }}>
-            Join companies securing their AI systems with professional security testing. 
-            Create your test plan for free and run comprehensive assessments in minutes.
-          </Typography>
-          <Button
-            variant="contained"
-            size="large"
-            onClick={() => navigate('/redteam/setup')}
-            startIcon={<PlayArrow />}
-            sx={{ px: 4, py: 1.5, fontSize: '1.1rem' }}
-          >
-            Create Free Test Plan
-          </Button>
-        </Paper>
       </Container>
     </Box>
   );

@@ -3,6 +3,7 @@ import { DEFAULT_PLUGINS } from '@promptfoo/redteam/constants';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { ApplicationDefinition, Config, ProviderOptions } from '../types';
+import { callAuthenticatedApi } from '@app/utils/api';
 
 interface RecentlyUsedPlugins {
   plugins: Plugin[];
@@ -35,6 +36,10 @@ interface RedTeamConfigState {
   setFullConfig: (config: Config) => void;
   resetConfig: () => void;
   updateApplicationDefinition: (section: keyof ApplicationDefinition, value: string) => void;
+  saveConfig: (name: string) => Promise<string>;
+  loadConfig: (configId: string) => Promise<void>;
+  configId?: string;
+  setConfigId: (id?: string) => void;
 }
 
 export const DEFAULT_HTTP_TARGET: ProviderOptions = {
@@ -273,7 +278,7 @@ export const EXAMPLE_CONFIG: Config = {
 
 export const useRedTeamConfig = create<RedTeamConfigState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       config: defaultConfig,
       updateConfig: (section, value) =>
         set((state) => ({
@@ -323,9 +328,55 @@ export const useRedTeamConfig = create<RedTeamConfigState>()(
         }),
       setFullConfig: (config) => set({ config }),
       resetConfig: () => {
-        set({ config: defaultConfig });
+        set({ config: defaultConfig, configId: undefined });
         // There's a bunch of state that's not persisted that we want to reset
         window.location.reload();
+      },
+      saveConfig: async (name: string) => {
+        const { config } = get();
+        try {
+          const response = await callAuthenticatedApi('/configs', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              name,
+              type: 'redteam',
+              config,
+            }),
+          });
+
+          if (!response.ok) {
+            throw new Error('Failed to save config');
+          }
+
+          const result = await response.json();
+          set({ configId: result.id });
+          return result.id;
+        } catch (error) {
+          console.error('Error saving config:', error);
+          throw error;
+        }
+      },
+      loadConfig: async (configId: string) => {
+        try {
+          const response = await callAuthenticatedApi(`/configs/redteam/${configId}`);
+
+          if (!response.ok) {
+            throw new Error('Failed to load config');
+          }
+
+          const result = await response.json();
+          set({ config: result.config, configId: result.id });
+        } catch (error) {
+          console.error('Error loading config:', error);
+          throw error;
+        }
+      },
+      configId: undefined,
+      setConfigId: (id?: string) => {
+        set({ configId: id });
       },
       updateApplicationDefinition: (section: keyof ApplicationDefinition, value: string) =>
         set((state) => {
@@ -345,6 +396,10 @@ export const useRedTeamConfig = create<RedTeamConfigState>()(
     }),
     {
       name: 'redTeamConfig',
+      partialize: (state) => ({ 
+        config: state.config,
+        // Don't persist configId as it should be session-specific
+      }),
     },
   ),
 );

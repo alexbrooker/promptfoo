@@ -14,6 +14,7 @@ import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
 import Dialog from '@mui/material/Dialog';
+import LinearProgress from '@mui/material/LinearProgress';
 import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
 import Divider from '@mui/material/Divider';
@@ -43,6 +44,7 @@ export default function QuickScanReview() {
   const [logs, setLogs] = useState<string[]>([]);
   const [evalId, setEvalId] = useState<string | null>(null);
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
+  const [progress, setProgress] = useState<{ completed: number; total: number } | null>(null);
   const { showToast } = useToast();
   const [isJobStatusDialogOpen, setIsJobStatusDialogOpen] = useState(false);
   const [pollInterval, setPollInterval] = useState<NodeJS.Timeout | null>(null);
@@ -80,11 +82,17 @@ export default function QuickScanReview() {
                 setLogs(status.logs);
               }
 
+              // Update progress information
+              if (status.progress !== undefined && status.total !== undefined) {
+                setProgress({ completed: status.progress, total: status.total });
+              }
+
               if (status.status === 'complete' || status.status === 'error') {
                 clearInterval(interval);
                 setPollInterval(null);
                 setIsRunning(false);
                 setCurrentJobId(null);
+                setProgress(null);
 
                 if (status.status === 'complete' && status.result && status.evalId) {
                   setEvalId(status.evalId);
@@ -209,6 +217,7 @@ export default function QuickScanReview() {
     setIsRunning(true);
     setLogs([]);
     setEvalId(null);
+    setProgress(null);
 
     try {
       const response = await callAuthenticatedApi('/redteam/run', {
@@ -225,6 +234,20 @@ export default function QuickScanReview() {
         }),
       });
 
+      if (!response.ok) {
+        const errorData = await response.json();
+        
+        // Handle insufficient credits error (402 Payment Required)
+        if (response.status === 402) {
+          const creditMessage = errorData.message || 'Insufficient scan credits to run this scan.';
+          showToast(creditMessage, 'error');
+          setIsRunning(false);
+          return;
+        }
+        
+        throw new Error(errorData.error || errorData.message || `HTTP ${response.status}`);
+      }
+
       const { id } = await response.json();
       setCurrentJobId(id);
 
@@ -236,11 +259,17 @@ export default function QuickScanReview() {
           setLogs(status.logs);
         }
 
+        // Update progress information
+        if (status.progress !== undefined && status.total !== undefined) {
+          setProgress({ completed: status.progress, total: status.total });
+        }
+
         if (status.status === 'complete' || status.status === 'error') {
           clearInterval(interval);
           setPollInterval(null);
           setIsRunning(false);
           setCurrentJobId(null);
+          setProgress(null);
 
           if (status.status === 'complete' && status.result && status.evalId) {
             setEvalId(status.evalId);
@@ -290,6 +319,7 @@ export default function QuickScanReview() {
 
       setIsRunning(false);
       setCurrentJobId(null);
+      setProgress(null);
       showToast('Cancel request submitted', 'success');
     } catch (error) {
       console.error('Error cancelling job:', error);
@@ -319,7 +349,7 @@ export default function QuickScanReview() {
   }, [pollInterval]);
 
   return (
-    <Box maxWidth="lg" mx="auto">
+    <Box sx={{ maxWidth: '800px', margin: '0 auto' }}>
       <Typography variant="h4" gutterBottom sx={{ fontWeight: 'bold', mb: 4 }}>
         Quick Scan Configuration
       </Typography>
@@ -415,7 +445,11 @@ export default function QuickScanReview() {
             }
             sx={{ px: 4, py: 1.5 }}
           >
-            {isRunning ? 'Running Quick Scan...' : 'Start Quick Scan'}
+            {isRunning ? (
+              progress && progress.total > 0 
+                ? `Running (${progress.completed}/${progress.total} tests)...`
+                : 'Running Quick Scan...'
+            ) : 'Start Quick Scan'}
           </Button>
           {isRunning && (
             <Button
@@ -448,6 +482,25 @@ export default function QuickScanReview() {
             </>
           )}
         </Box>
+
+        {/* Progress Bar */}
+        {isRunning && progress && progress.total > 0 && (
+          <Box sx={{ mt: 3, mb: 2 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+              <Typography variant="body2" color="text.secondary">
+                Progress: {progress.completed} of {progress.total} tests completed
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {Math.round((progress.completed / progress.total) * 100)}%
+              </Typography>
+            </Box>
+            <LinearProgress
+              variant="determinate"
+              value={(progress.completed / progress.total) * 100}
+              sx={{ height: 8, borderRadius: 4 }}
+            />
+          </Box>
+        )}
         
         {logs.length > 0 && <LogViewer logs={logs} />}
       </Paper>

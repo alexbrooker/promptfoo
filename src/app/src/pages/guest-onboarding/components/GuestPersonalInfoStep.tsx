@@ -21,9 +21,10 @@ interface GuestPersonalInfoStepProps {
   data: GuestOnboardingData;
   onUpdate: (updates: Partial<GuestOnboardingData>) => void;
   onNext: () => void;
+  onBack?: () => void;
 }
 
-export function GuestPersonalInfoStep({ data, onUpdate, onNext }: GuestPersonalInfoStepProps) {
+export function GuestPersonalInfoStep({ data, onUpdate, onNext, onBack }: GuestPersonalInfoStepProps) {
   const [name, setName] = useState(data.name || '');
   const [company, setCompany] = useState(data.company || '');
 
@@ -68,12 +69,18 @@ export function GuestPersonalInfoStep({ data, onUpdate, onNext }: GuestPersonalI
         </Grid>
       </Grid>
       
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 3 }}>
+        {onBack && (
+          <Button onClick={onBack} size="large">
+            Back
+          </Button>
+        )}
         <Button
           variant="contained"
           onClick={handleNext}
           disabled={!isValid}
           size="large"
+          sx={{ ml: 'auto' }}
         >
           Continue
         </Button>

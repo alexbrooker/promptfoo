@@ -98,8 +98,16 @@ function CreateButton() {
         <MenuItem onClick={handleClose} component={RouterLink} to="/redteam/quick-scan">
           Quick Scan
         </MenuItem>
-        <MenuItem onClick={handleClose} component={RouterLink} to="/redteam/setup">
-          Full Setup
+        <MenuItem 
+          disabled
+          sx={{ 
+            opacity: 0.5,
+            '&:hover': {
+              backgroundColor: 'transparent'
+            }
+          }}
+        >
+          Full Setup (Coming Soon)
         </MenuItem>
       </Menu>
     </>

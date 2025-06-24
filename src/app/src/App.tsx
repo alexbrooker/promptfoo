@@ -24,6 +24,8 @@ import LoginPage from './pages/login';
 import ModelAuditPage from './pages/model-audit/page';
 import OnboardingPage from './pages/onboarding/page';
 import GuestOnboardingPage from './pages/guest-onboarding/page';
+import EmailVerificationPage from './pages/email-verification';
+import GuestLayout from './components/GuestLayout';
 import PromptsPage from './pages/prompts/page';
 import ReportPage from './pages/redteam/report/page';
 import RedteamReportsPage from './pages/redteam/reports/page';
@@ -54,35 +56,18 @@ const router = createBrowserRouter(
       {import.meta.env.VITE_PROMPTFOO_LAUNCHER && (
         <Route path="/launcher" element={<LauncherPage />} />
       )}
+      {/* Guest onboarding with clean layout - outside PageShell */}
+      <Route path="/get-started" element={<GuestLayout />}>
+        <Route index element={<GuestOnboardingPage />} />
+      </Route>
+      {/* Email verification page with clean layout */}
+      <Route path="/email-verification" element={<EmailVerificationPage />} />
       <Route path="/" element={<PageShell />}>
         <Route element={<TelemetryTracker />}>
-          <Route
-            index
-            element={
-              <Navigate
-                to={import.meta.env.VITE_PROMPTFOO_LAUNCHER ? '/launcher' : '/home'}
-                replace
-              />
-            }
-          />
-          <Route path="/datasets" element={<DatasetsPage />} />
-          <Route path="/eval" element={<EvalPage />} />
-          <Route path="/evals" element={<EvalsIndexPage />} />
-          <Route path="/eval/:evalId" element={<EvalPage />} />
-
-          {/* Redirect legacy /progress route to /history (since v0.104.5) */}
-          <Route path="/progress" element={<Navigate to="/history" replace />} />
-          <Route path="/history" element={<HistoryPage />} />
-
-          <Route path="/prompts" element={<PromptsPage />} />
-          <Route path="/model-audit" element={<ModelAuditPage />} />
-          <Route path="/redteam" element={<Navigate to="/redteam/setup" replace />} />
-          <Route path="/redteam/setup" element={<RedteamSetupPage />} />
-          <Route path="/redteam/quick-scan" element={<QuickScanPage />} />
-          <Route path="/report" element={<ReportPage />} />
-          <Route path="/setup" element={<EvalCreatorPage />} />
+          {/* Public routes - accessible without authentication */}
           <Route path="/login" element={<LoginPage />} />
-          <Route path="/get-started" element={<GuestOnboardingPage />} />
+          
+          {/* Protected routes - require authentication */}
           <Route
             element={
               <ProtectedRoute>
@@ -100,6 +85,17 @@ const router = createBrowserRouter(
               }
             />
             <Route path="/home" element={<LandingPage />} />
+            <Route path="/datasets" element={<DatasetsPage />} />
+            <Route path="/eval" element={<EvalPage />} />
+            <Route path="/evals" element={<EvalsIndexPage />} />
+            <Route path="/eval/:evalId" element={<EvalPage />} />
+
+            {/* Redirect legacy /progress route to /history (since v0.104.5) */}
+            <Route path="/progress" element={<Navigate to="/history" replace />} />
+            <Route path="/history" element={<HistoryPage />} />
+
+            <Route path="/prompts" element={<PromptsPage />} />
+            <Route path="/model-audit" element={<ModelAuditPage />} />
             <Route path="/redteam" element={<Navigate to="/redteam/setup" replace />} />
             <Route path="/redteam/setup" element={<RedteamSetupPage />} />
             <Route path="/redteam/quick-scan" element={<QuickScanPage />} />

@@ -54,7 +54,13 @@ interface JobStatusResponse {
 }
 
 export default function Review() {
-  const { config, updateConfig } = useRedTeamConfig();
+  const { config, updateConfig, saveConfig, configId } = useRedTeamConfig();
+  
+  // Quick scan fixed settings
+  const quickScanNumTests = 5;
+  const quickScanMaxConcurrency = '1';
+  const quickScanDelayMs = '1000';
+  const isSubscriber = false; // TODO: Get from user context/subscription status
   const theme = useTheme();
   const { recordEvent } = useTelemetry();
   const [isYamlDialogOpen, setIsYamlDialogOpen] = React.useState(false);
@@ -68,7 +74,7 @@ export default function Review() {
   const [forceRegeneration /*, setForceRegeneration*/] = React.useState(true);
   const [debugMode, setDebugMode] = React.useState(false);
   const [maxConcurrency, setMaxConcurrency] = React.useState('1');
-  const [delayMs, setDelayMs] = React.useState('0');
+  const [delayMs, setDelayMs] = React.useState('1000');
   const [isJobStatusDialogOpen, setIsJobStatusDialogOpen] = useState(false);
   const [pollInterval, setPollInterval] = useState<NodeJS.Timeout | null>(null);
   const [isRunSettingsDialogOpen, setIsRunSettingsDialogOpen] = useState(false);
@@ -150,6 +156,23 @@ export default function Review() {
     
     checkForExistingJobs();
   }, []);
+
+  const handleSaveConfig = async () => {
+    try {
+      const configName = config.description || 'My Security Test Plan';
+      const savedConfigId = await saveConfig(configName);
+      showToast('Test plan saved successfully!', 'success');
+      recordEvent('feature_used', {
+        feature: 'redteam_config_save',
+        numPlugins: config.plugins.length,
+        numStrategies: config.strategies.length,
+        targetType: config.target.id,
+      });
+    } catch (error) {
+      console.error('Error saving config:', error);
+      showToast('Failed to save test plan', 'error');
+    }
+  };
 
   const handleSaveYaml = () => {
     const blob = new Blob([yamlContent], { type: 'text/yaml' });
@@ -303,11 +326,14 @@ export default function Review() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          config: getUnifiedConfig(config),
+          config: getUnifiedConfig({
+            ...config,
+            numTests: quickScanNumTests
+          }),
           force: forceRegeneration,
           verbose: debugMode,
-          maxConcurrency,
-          delayMs,
+          maxConcurrency: quickScanMaxConcurrency,
+          delayMs: quickScanDelayMs,
         }),
       });
 
@@ -710,36 +736,11 @@ export default function Review() {
 
       <Divider sx={{ my: 4 }} />
 
-      <Typography variant="h5" gutterBottom sx={{ mb: 3 }}>
-        Choose Your Security Assessment
-      </Typography>
-
-      <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={12} md={6}>
-          <PricingCard 
-            tier="quick" 
-            configName={config.description || 'My Security Test Plan'}
-            onFreeRun={handleRunWithSettings}
-            isRunning={isRunning}
-          />
-        </Grid>
-        <Grid item xs={12} md={6}>
-          <PricingCard 
-            tier="business" 
-            configName={config.description || 'My Security Test Plan'}
-            onFreeRun={handleRunWithSettings}
-            isRunning={isRunning}
-          />
-        </Grid>
-      </Grid>
-
-      <Divider sx={{ my: 4 }} />
-
       <Typography variant="h6" gutterBottom>
-        Advanced Options
+        Export Configuration
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        For developers and advanced users who want to run tests via command line
+        Save your test plan configuration for CLI usage or sharing
       </Typography>
 
       <Paper elevation={1} sx={{ p: 3 }}>
@@ -750,13 +751,24 @@ export default function Review() {
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             Save your test plan configuration for CLI usage or sharing
           </Typography>
-          <Box sx={{ display: 'flex', gap: 2 }}>
+          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+            <Button
+              variant="contained"
+              onClick={handleSaveConfig}
+              startIcon={<SaveIcon />}
+              sx={{ 
+                backgroundColor: theme.palette.success.main,
+                '&:hover': { backgroundColor: theme.palette.success.dark }
+              }}
+            >
+              {configId ? 'Update Test Plan' : 'Save Test Plan'}
+            </Button>
             <Button
               variant="outlined"
               onClick={handleSaveYaml}
               startIcon={<SaveIcon />}
             >
-              Save YAML
+              Export YAML
             </Button>
             <Button
               variant="outlined"
@@ -769,64 +781,154 @@ export default function Review() {
         </Box>
 
         <Box>
-          <Typography variant="subtitle1" gutterBottom>
-            Free Preview Test
+          <Typography variant="h5" gutterBottom sx={{ mb: 3 }}>
+            Run Quick Security Scan
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Run a limited test to preview the security assessment process
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            Execute a quick security scan with 5 test cases per plugin. Upgrade for full customization.
           </Typography>
-          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+          
+          <Paper elevation={2} sx={{ p: 3, mb: 3, backgroundColor: theme.palette.grey[50] }}>
+            <Typography variant="h6" gutterBottom>
+              Run Settings
+            </Typography>
+            <Grid container spacing={2} sx={{ mb: 2 }}>
+              <Grid item xs={12} sm={6} md={3}>
+                <Typography variant="body2" color="text.secondary">Test Cases</Typography>
+                <Typography variant="h6">{quickScanNumTests}</Typography>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Typography variant="body2" color="text.secondary">Debug Mode</Typography>
+                <Typography variant="h6">{debugMode ? 'Enabled' : 'Disabled'}</Typography>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Typography variant="body2" color="text.secondary">Max Concurrency</Typography>
+                <Typography variant="h6">{quickScanMaxConcurrency}</Typography>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Typography variant="body2" color="text.secondary">Delay (ms)</Typography>
+                <Typography variant="h6">{quickScanDelayMs}</Typography>
+              </Grid>
+            </Grid>
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+              <Tooltip title={isSubscriber ? "Modify Run Settings" : "Upgrade to modify run settings"}>
+                <span>
+                  <IconButton
+                    onClick={() => isSubscriber && setIsRunSettingsDialogOpen(true)}
+                    disabled={isRunning || !isSubscriber}
+                    size="small"
+                    sx={{ 
+                      border: `1px solid ${theme.palette.divider}`,
+                      borderRadius: 1,
+                      opacity: isSubscriber ? 1 : 0.5
+                    }}
+                  >
+                    <SettingsIcon fontSize="small" />
+                  </IconButton>
+                </span>
+              </Tooltip>
+              <Typography variant="body2" color="text.secondary">
+                {isSubscriber ? 'Click to modify settings' : 'Quick Scan settings (upgrade to customize)'}
+              </Typography>
+            </Box>
+          </Paper>
+          
+          <Box sx={{ display: 'flex', gap: 3, alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' }}>
             <Button
-              variant="outlined"
+              variant="contained"
+              size="large"
               onClick={handleRunWithSettings}
               disabled={isRunning}
               startIcon={
-                isRunning ? <CircularProgress size={20} color="inherit" /> : <PlayArrowIcon />
+                isRunning ? <CircularProgress size={24} color="inherit" /> : <PlayArrowIcon />
               }
+              sx={{
+                minHeight: 56,
+                minWidth: 200,
+                fontSize: '1.1rem',
+                fontWeight: 'bold',
+                px: 4,
+                py: 2,
+                borderRadius: 2,
+                textTransform: 'none',
+                backgroundColor: theme.palette.primary.main,
+                '&:hover': {
+                  backgroundColor: theme.palette.primary.dark,
+                  transform: 'translateY(-1px)',
+                  boxShadow: theme.shadows[4]
+                },
+                transition: 'all 0.2s ease-in-out'
+              }}
             >
-              {isRunning ? 'Running Preview...' : 'Run Free Preview'}
+              {isRunning ? 'Running Quick Scan...' : 'Run Quick Scan'}
             </Button>
-              {isRunning && (
+            
+            {isRunning && (
+              <Button
+                variant="contained"
+                color="error"
+                size="large"
+                onClick={handleCancel}
+                startIcon={<StopIcon />}
+                sx={{
+                  minHeight: 56,
+                  minWidth: 120,
+                  fontSize: '1rem',
+                  fontWeight: 'bold',
+                  px: 3,
+                  py: 2,
+                  borderRadius: 2,
+                  textTransform: 'none'
+                }}
+              >
+                Cancel
+              </Button>
+            )}
+            
+            {evalId && (
+              <>
                 <Button
                   variant="contained"
-                  color="error"
-                  onClick={handleCancel}
-                  startIcon={<StopIcon />}
+                  color="success"
+                  size="large"
+                  href={`/report?evalId=${evalId}`}
+                  startIcon={<AssessmentIcon />}
+                  sx={{
+                    minHeight: 56,
+                    minWidth: 140,
+                    fontSize: '1rem',
+                    fontWeight: 'bold',
+                    px: 3,
+                    py: 2,
+                    borderRadius: 2,
+                    textTransform: 'none'
+                  }}
                 >
-                  Cancel
+                  View Report
                 </Button>
-              )}
-              {evalId && (
-                <>
-                  <Button
-                    variant="contained"
-                    color="success"
-                    href={`/report?evalId=${evalId}`}
-                    startIcon={<AssessmentIcon />}
-                  >
-                    View Report
-                  </Button>
-                  <Button
-                    variant="contained"
-                    color="success"
-                    href={`/eval?evalId=${evalId}`}
-                    startIcon={<SearchIcon />}
-                  >
-                    View Probes
-                  </Button>
-                </>
-              )}
-              <Tooltip title="Run Settings">
-                <IconButton
-                  onClick={() => setIsRunSettingsDialogOpen(true)}
-                  disabled={isRunning}
-                  size="small"
+                <Button
+                  variant="outlined"
+                  color="success"
+                  size="large"
+                  href={`/eval?evalId=${evalId}`}
+                  startIcon={<SearchIcon />}
+                  sx={{
+                    minHeight: 56,
+                    minWidth: 140,
+                    fontSize: '1rem',
+                    fontWeight: 'bold',
+                    px: 3,
+                    py: 2,
+                    borderRadius: 2,
+                    textTransform: 'none'
+                  }}
                 >
-                  <SettingsIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-            </Box>
+                  View Probes
+                </Button>
+              </>
+            )}
           </Box>
+        </Box>
           {logs.length > 0 && <LogViewer logs={logs} />}
       </Paper>
 

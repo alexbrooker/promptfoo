@@ -7,39 +7,43 @@ import {
   Button,
   Typography,
   Paper,
-  Container,
 } from '@mui/material';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { GuestPersonalInfoStep } from './components/GuestPersonalInfoStep';
 import { GuestChatbotDetailsStep } from './components/GuestChatbotDetailsStep';
-import { GuestComplianceStep } from './components/GuestComplianceStep';
+import { GuestTestPlanStep } from './components/GuestTestPlanStep';
 import { GuestSignupStep } from './components/GuestSignupStep';
 
 const steps = [
-  'Personal Information',
-  'AI Assistant Details', 
-  'Testing Goals',
-  'Create Free Account'
+  'AI System Details',
+  'Testing Plan',
+  'Get Started'
 ];
 
 interface GuestOnboardingData {
-  name: string;
-  company: string;
   chatbotRole: string;
-  industry: string;
-  useCase: string;
+  industry: string[];
+  useCase: string[];
   complianceNeeds: string[];
   countryOfOperation: string;
+  generatedConfig?: any; // Store the generated test plan config
 }
 
+// Hardcoded compliance needs - all frameworks we support
+const ALL_COMPLIANCE_NEEDS = [
+  'OWASP LLM Top 10',
+  'OWASP API Security', 
+  'MITRE ATLAS',
+  'NIST AI Framework',
+  'EU AI Act'
+];
+
 const defaultData: GuestOnboardingData = {
-  name: '',
-  company: '',
   chatbotRole: '',
-  industry: '',
-  useCase: '',
-  complianceNeeds: [],
+  industry: [],
+  useCase: [],
+  complianceNeeds: ALL_COMPLIANCE_NEEDS, // Always include all frameworks
   countryOfOperation: '',
+  generatedConfig: null,
 };
 
 export default function GuestOnboardingPage() {
@@ -70,6 +74,10 @@ export default function GuestOnboardingPage() {
     setGuestData(prev => ({ ...prev, ...updates }));
   };
 
+  const handleTestPlanGenerated = (config: any) => {
+    updateGuestData({ generatedConfig: config });
+  };
+
   const handleNext = () => {
     setActiveStep((prevActiveStep) => prevActiveStep + 1);
   };
@@ -90,7 +98,7 @@ export default function GuestOnboardingPage() {
     switch (step) {
       case 0:
         return (
-          <GuestPersonalInfoStep 
+          <GuestChatbotDetailsStep 
             data={guestData}
             onUpdate={updateGuestData}
             onNext={handleNext} 
@@ -98,23 +106,14 @@ export default function GuestOnboardingPage() {
         );
       case 1:
         return (
-          <GuestChatbotDetailsStep 
+          <GuestTestPlanStep 
             data={guestData}
-            onUpdate={updateGuestData}
             onNext={handleNext} 
-            onBack={handleBack} 
+            onBack={handleBack}
+            onTestPlanGenerated={handleTestPlanGenerated}
           />
         );
       case 2:
-        return (
-          <GuestComplianceStep 
-            data={guestData}
-            onUpdate={updateGuestData}
-            onNext={handleNext} 
-            onBack={handleBack} 
-          />
-        );
-      case 3:
         return (
           <GuestSignupStep 
             guestData={guestData}
@@ -128,29 +127,28 @@ export default function GuestOnboardingPage() {
   };
 
   return (
-    <Container maxWidth="md">
-      <Box sx={{ width: '100%', mt: 4 }}>
-        <Paper elevation={3} sx={{ p: 4 }}>
-          <Typography variant="h4" component="h1" gutterBottom align="center">
-            Get Started with AI Security Testing
-          </Typography>
-          <Typography variant="subtitle1" gutterBottom align="center" color="text.secondary" sx={{ mb: 4 }}>
-            Create a personalized security testing plan for your AI assistant in minutes
-          </Typography>
-          
-          <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
-            {steps.map((label) => (
-              <Step key={label}>
-                <StepLabel>{label}</StepLabel>
-              </Step>
-            ))}
-          </Stepper>
-          
-          <Box sx={{ mt: 2 }}>
-            {getStepContent(activeStep)}
-          </Box>
-        </Paper>
+    <Paper 
+      elevation={6} 
+      sx={{ 
+        p: { xs: 3, md: 5 }, 
+        borderRadius: 3,
+        background: 'rgba(255, 255, 255, 0.95)',
+        backdropFilter: 'blur(10px)',
+        border: '1px solid rgba(255, 255, 255, 0.2)',
+      }}
+    >
+      
+      <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
+        {steps.map((label) => (
+          <Step key={label}>
+            <StepLabel>{label}</StepLabel>
+          </Step>
+        ))}
+      </Stepper>
+      
+      <Box sx={{ mt: 2 }}>
+        {getStepContent(activeStep)}
       </Box>
-    </Container>
+    </Paper>
   );
 }

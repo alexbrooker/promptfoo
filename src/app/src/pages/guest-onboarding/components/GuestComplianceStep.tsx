@@ -4,26 +4,14 @@ import {
   Button,
   Typography,
   Grid,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  SelectChangeEvent,
-  FormGroup,
-  FormControlLabel,
-  Checkbox,
-  Card,
-  CardContent,
   Chip,
   Stack,
 } from '@mui/material';
 
 interface GuestOnboardingData {
-  name: string;
-  company: string;
   chatbotRole: string;
-  industry: string;
-  useCase: string;
+  industry: string[];
+  useCase: string[];
   complianceNeeds: string[];
   countryOfOperation: string;
 }
@@ -35,55 +23,28 @@ interface GuestComplianceStepProps {
   onBack: () => void;
 }
 
-const countries = [
-  'United States',
-  'United Kingdom',
-  'Canada',
-  'Germany',
-  'France',
-  'Australia',
-  'Japan',
-  'Singapore',
-  'Netherlands',
-  'Sweden',
-  'Switzerland',
-  'Other'
-];
-
-const complianceOptions = [
-  { value: 'GDPR', label: 'GDPR (EU Data Protection)', description: 'European data privacy regulation' },
-  { value: 'HIPAA', label: 'HIPAA (Healthcare)', description: 'US healthcare privacy standards' },
-  { value: 'SOX', label: 'SOX (Financial)', description: 'US financial reporting compliance' },
-  { value: 'PCI-DSS', label: 'PCI-DSS (Payment)', description: 'Payment card industry standards' },
-  { value: 'SOC2', label: 'SOC 2 (Security)', description: 'Security and availability standards' },
-  { value: 'ISO27001', label: 'ISO 27001 (Security)', description: 'International security management' },
-  { value: 'COPPA', label: 'COPPA (Children)', description: 'Children\'s privacy protection' },
-  { value: 'FERPA', label: 'FERPA (Education)', description: 'Educational privacy rights' },
+const securityFrameworks = [
+  { name: 'OWASP LLM Top 10', color: '#e3f2fd', description: 'Core AI security vulnerabilities' },
+  { name: 'OWASP API Security', color: '#f3e5f5', description: 'API security best practices' },
+  { name: 'MITRE ATLAS', color: '#e8f5e8', description: 'AI threat taxonomy' },
+  { name: 'NIST AI Framework', color: '#fff3e0', description: 'AI risk management' },
+  { name: 'EU AI Act', color: '#fce4ec', description: 'European AI regulation' }
 ];
 
 const testingGoals = [
   'Prevent data leaks and privacy violations',
   'Ensure safe responses to harmful content',
   'Test resistance to jailbreaking attempts',
-  'Verify compliance with industry regulations',
   'Check for bias and fairness issues',
   'Validate prompt injection defenses',
   'Test output quality and accuracy',
-  'Ensure appropriate content filtering'
+  'Ensure appropriate content filtering',
+  'Verify system security boundaries'
 ];
 
 export function GuestComplianceStep({ data, onUpdate, onNext, onBack }: GuestComplianceStepProps) {
-  const [complianceNeeds, setComplianceNeeds] = useState<string[]>(data.complianceNeeds || []);
-  const [countryOfOperation, setCountryOfOperation] = useState(data.countryOfOperation || '');
   const [selectedGoals, setSelectedGoals] = useState<string[]>([]);
-
-  const handleComplianceChange = (compliance: string) => {
-    setComplianceNeeds(prev => 
-      prev.includes(compliance) 
-        ? prev.filter(c => c !== compliance)
-        : [...prev, compliance]
-    );
-  };
+  const [selectedFrameworks, setSelectedFrameworks] = useState<string[]>(data.complianceNeeds || []);
 
   const handleGoalToggle = (goal: string) => {
     setSelectedGoals(prev =>
@@ -93,115 +54,116 @@ export function GuestComplianceStep({ data, onUpdate, onNext, onBack }: GuestCom
     );
   };
 
+  const handleFrameworkToggle = (framework: string) => {
+    setSelectedFrameworks(prev =>
+      prev.includes(framework)
+        ? prev.filter(f => f !== framework)
+        : [...prev, framework]
+    );
+  };
+
   const handleNext = () => {
-    onUpdate({ complianceNeeds, countryOfOperation });
+    onUpdate({ complianceNeeds: selectedFrameworks });
     onNext();
   };
 
-  const isValid = countryOfOperation.trim();
+  const isValid = selectedGoals.length > 0;
 
   return (
-    <Box>
-      <Typography variant="h6" gutterBottom>
-        Testing Goals & Compliance
+    <Box sx={{ maxWidth: '800px', mx: 'auto', textAlign: 'center' }}>
+      <Typography variant="h3" gutterBottom align="center" sx={{ mb: 1, fontWeight: 'bold' }}>
+        I want to test my AI for...
       </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        Help us customize your security testing plan based on your specific needs and requirements
+      <Typography variant="h6" color="text.secondary" sx={{ mb: 5, textAlign: 'center', fontWeight: 'normal' }}>
+        Choose your security priorities to customize your testing plan
       </Typography>
       
-      <Grid container spacing={3}>
+      <Grid container spacing={4} justifyContent="center">
         <Grid item xs={12}>
-          <Typography variant="subtitle1" gutterBottom sx={{ mt: 2 }}>
-            What are your main AI security testing goals?
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Select the security concerns that matter most to your organization:
-          </Typography>
-          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
+          <Stack direction="row" spacing={1} sx={{ mb: 4, flexWrap: 'wrap', gap: 1, justifyContent: 'center' }}>
             {testingGoals.map((goal) => (
               <Chip
                 key={goal}
                 label={goal}
                 onClick={() => handleGoalToggle(goal)}
-                color={selectedGoals.includes(goal) ? 'primary' : 'default'}
-                variant={selectedGoals.includes(goal) ? 'filled' : 'outlined'}
+                sx={{
+                  backgroundColor: selectedGoals.includes(goal) ? '#1976d2' : 'transparent',
+                  border: `2px solid ${selectedGoals.includes(goal) ? '#1976d2' : '#e0e0e0'}`,
+                  color: selectedGoals.includes(goal) ? 'white' : 'inherit',
+                  fontWeight: selectedGoals.includes(goal) ? 'bold' : 'normal',
+                  fontSize: '1rem',
+                  padding: '8px 16px',
+                  '&:hover': {
+                    backgroundColor: selectedGoals.includes(goal) ? '#1565c0' : '#f5f5f5',
+                  },
+                }}
                 clickable
-                size="small"
               />
             ))}
           </Stack>
         </Grid>
 
         <Grid item xs={12}>
-          <FormControl fullWidth required>
-            <InputLabel>Primary Country of Operation</InputLabel>
-            <Select
-              value={countryOfOperation}
-              label="Primary Country of Operation"
-              onChange={(e: SelectChangeEvent) => setCountryOfOperation(e.target.value)}
-            >
-              {countries.map((country) => (
-                <MenuItem key={country} value={country}>{country}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </Grid>
-
-        <Grid item xs={12}>
-          <Typography variant="subtitle1" gutterBottom>
-            Compliance Requirements (Optional)
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Select any compliance standards your organization needs to meet:
-          </Typography>
-          <Grid container spacing={2}>
-            {complianceOptions.map((option) => (
-              <Grid item xs={12} sm={6} key={option.value}>
-                <Card 
-                  sx={{ 
-                    cursor: 'pointer',
-                    border: complianceNeeds.includes(option.value) ? '2px solid' : '1px solid',
-                    borderColor: complianceNeeds.includes(option.value) ? 'primary.main' : 'divider',
-                    '&:hover': { borderColor: 'primary.main' }
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2, justifyContent: 'center' }}>
+            <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#666', mr: 2 }}>
+              using
+            </Typography>
+            <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1, justifyContent: 'center' }}>
+              {securityFrameworks.map((framework) => (
+                <Chip
+                  key={framework.name}
+                  label={framework.name}
+                  onClick={() => handleFrameworkToggle(framework.name)}
+                  sx={{
+                    backgroundColor: selectedFrameworks.includes(framework.name) ? framework.color : 'transparent',
+                    border: `2px solid ${selectedFrameworks.includes(framework.name) ? framework.color : '#e0e0e0'}`,
+                    color: selectedFrameworks.includes(framework.name) ? '#1976d2' : 'inherit',
+                    fontWeight: selectedFrameworks.includes(framework.name) ? 'bold' : 'normal',
+                    fontSize: '1rem',
+                    padding: '8px 16px',
+                    '&:hover': {
+                      backgroundColor: framework.color,
+                      opacity: 0.8,
+                    },
                   }}
-                  onClick={() => handleComplianceChange(option.value)}
-                >
-                  <CardContent sx={{ p: 2 }}>
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={complianceNeeds.includes(option.value)}
-                          onChange={() => handleComplianceChange(option.value)}
-                        />
-                      }
-                      label={
-                        <Box>
-                          <Typography variant="subtitle2">{option.label}</Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {option.description}
-                          </Typography>
-                        </Box>
-                      }
-                    />
-                  </CardContent>
-                </Card>
-              </Grid>
-            ))}
-          </Grid>
+                  clickable
+                />
+              ))}
+            </Stack>
+          </Box>
         </Grid>
       </Grid>
       
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 3 }}>
-        <Button onClick={onBack} size="large">
-          Back
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4, maxWidth: '400px', mx: 'auto' }}>
+        <Button 
+          onClick={onBack} 
+          size="large"
+          sx={{
+            padding: '12px 24px',
+            fontSize: '1rem',
+            borderRadius: '24px',
+            textTransform: 'none',
+          }}
+        >
+          ← Back
         </Button>
         <Button
           variant="contained"
           onClick={handleNext}
           disabled={!isValid}
           size="large"
+          sx={{
+            padding: '12px 32px',
+            fontSize: '1.1rem',
+            borderRadius: '24px',
+            textTransform: 'none',
+            background: 'linear-gradient(45deg, #1976d2 30%, #42a5f5 90%)',
+            '&:hover': {
+              background: 'linear-gradient(45deg, #1565c0 30%, #1e88e5 90%)',
+            },
+          }}
         >
-          Continue
+          Create my security plan →
         </Button>
       </Box>
     </Box>

@@ -1,5 +1,5 @@
 import React, { useMemo, useEffect, useState, useRef, forwardRef } from 'react';
-import { callApi } from '@app/utils/api';
+import { callAuthenticatedApi } from '@app/utils/api';
 import { Box, Typography, Paper, CircularProgress, useTheme, Link } from '@mui/material';
 import {
   DataGrid,
@@ -131,7 +131,7 @@ export default function EvalsDataGrid({
   useEffect(() => {
     const fetchEvals = async () => {
       try {
-        const response = await callApi('/results', { cache: 'no-store' });
+        const response = await callAuthenticatedApi('/eval/results', { cache: 'no-store' });
         if (!response.ok) {
           throw new Error('Failed to fetch evals');
         }
