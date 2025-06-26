@@ -18,7 +18,7 @@ redteamRouter.post('/generate', authenticateSupabaseUser, async (req: Authentica
   const { config } = req.body;
   
   try {
-    logger.debug(`Received generate request for user ${req.user.id}:`, JSON.stringify(config, null, 2));
+    logger.debug(`Received generate request for user ${req.user.id}: ${JSON.stringify(config, null, 2)}`);
     
     // TODO: Add credit consumption for generation phase
     const result = await redteamGenerationService.generateTestDataset(req.user.id, config);

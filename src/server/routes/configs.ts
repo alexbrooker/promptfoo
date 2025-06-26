@@ -6,7 +6,7 @@ import { getDb } from '../../database';
 import { configsTable } from '../../database/tables';
 import logger from '../../logger';
 import { templates, type TemplateTier } from '../templates/redteamTemplates';
-import { authenticateSupabaseUser, optionalSupabaseAuth, supabase, type AuthenticatedRequest } from '../middleware/auth';
+import { authenticateSupabaseUser, supabase, type AuthenticatedRequest } from '../middleware/auth';
 
 export const configsRouter = Router();
 
@@ -258,7 +258,7 @@ configsRouter.put('/:type/:id', authenticateSupabaseUser, async (req: Authentica
       .set({
         name,
         config,
-        updatedAt: new Date().toISOString(),
+        updatedAt: Math.floor(Date.now() / 1000),
       })
       .where(and(eq(configsTable.type, type), eq(configsTable.id, id)))
       .returning({

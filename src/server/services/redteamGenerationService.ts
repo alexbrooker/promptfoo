@@ -42,7 +42,7 @@ export class RedteamGenerationService {
     
     try {
       logger.info(`Starting test generation job ${jobId} for user ${userId}`);
-      logger.debug(`Config received:`, JSON.stringify(config, null, 2));
+      logger.debug(`Config received: ${JSON.stringify(config, null, 2)}`);
       
       // Extract redteam config from UnifiedConfig
       const redteamConfig = config.redteam || {};
@@ -63,7 +63,7 @@ export class RedteamGenerationService {
         purpose: redteamConfig.purpose || '',
         numTests: redteamConfig.numTests,
         language: redteamConfig.language || 'en',
-        prompts: Array.isArray(prompts) && prompts.length > 0 ? prompts : [''],
+        prompts: Array.isArray(prompts) && prompts.length > 0 ? prompts as [string, ...string[]] : ['default'],
         targetLabels: targets.map((target: any) => target.label || target.id || 'target'),
         entities: redteamConfig.entities,
         injectVar: redteamConfig.injectVar,
@@ -71,7 +71,7 @@ export class RedteamGenerationService {
         abortSignal,
       };
       
-      logger.debug(`Synthesize config:`, JSON.stringify(synthesizeConfig, null, 2));
+      logger.debug(`Synthesize config: ${JSON.stringify(synthesizeConfig, null, 2)}`);
       
       // Use existing synthesize logic - NO CHANGES to core
       const { testCases, purpose, entities, injectVar } = await synthesize(synthesizeConfig);
@@ -219,7 +219,7 @@ export class RedteamGenerationService {
     
     return {
       dataset_id: datasetId,
-      tests: dataset[0].tests || [],
+      tests: Array.isArray(dataset[0].tests) ? dataset[0].tests : [],
       test_count: userDataset.metadata?.test_count || 0,
       metadata: userDataset.metadata,
       created_at: userDataset.created_at,
