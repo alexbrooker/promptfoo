@@ -15,11 +15,14 @@ import {
   Stack,
   IconButton,
   Tooltip,
+  Collapse,
 } from '@mui/material';
 import {
   Visibility as VisibilityIcon,
   PlayArrow as PlayArrowIcon,
   Refresh as RefreshIcon,
+  ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useUserStore } from '../../../stores/userStore';
@@ -40,6 +43,7 @@ export default function DatasetsPage() {
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [expandedPurposes, setExpandedPurposes] = useState<Set<string>>(new Set());
 
   const fetchDatasets = async () => {
     if (!user) return;
@@ -86,6 +90,64 @@ export default function DatasetsPage() {
     return plugin.replace(/^redteam:/, '').replace(/-/g, ' ');
   };
 
+  const togglePurposeExpansion = (datasetId: string) => {
+    setExpandedPurposes(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(datasetId)) {
+        newSet.delete(datasetId);
+      } else {
+        newSet.add(datasetId);
+      }
+      return newSet;
+    });
+  };
+
+  const renderPurposeText = (purpose: string) => {
+    const parts = purpose.split(/```/);
+    
+    return parts.map((part, index) => {
+      if (index % 2 === 1) {
+        // This is a code block
+        return (
+          <Box
+            key={index}
+            component="code"
+            sx={{
+              display: 'block',
+              backgroundColor: 'grey.100',
+              padding: 1,
+              borderRadius: 1,
+              fontFamily: 'monospace',
+              fontSize: '0.875rem',
+              whiteSpace: 'pre-wrap',
+              my: 1,
+              border: '1px solid',
+              borderColor: 'grey.300',
+            }}
+          >
+            {part.trim()}
+          </Box>
+        );
+      } else {
+        // This is regular text
+        return part.trim() ? (
+          <Typography key={index} variant="body2" color="text.secondary" component="span">
+            {part.trim()}
+          </Typography>
+        ) : null;
+      }
+    });
+  };
+
+  const shouldTruncatePurpose = (purpose: string) => {
+    return purpose.length > 200 || purpose.includes('```');
+  };
+
+  const getTruncatedPurpose = (purpose: string) => {
+    if (purpose.length <= 200) return purpose;
+    return purpose.substring(0, 200) + '...';
+  };
+
   if (loading) {
     return (
       <Container maxWidth="lg">
@@ -101,7 +163,7 @@ export default function DatasetsPage() {
       <Box py={4}>
         <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
           <Typography variant="h4" component="h1">
-            My Test Datasets
+            Test Specifications
           </Typography>
           <Stack direction="row" spacing={2}>
             <Tooltip title="Refresh datasets">
@@ -143,7 +205,7 @@ export default function DatasetsPage() {
         ) : (
           <Grid container spacing={3}>
             {datasets.map((dataset) => (
-              <Grid item xs={12} md={6} lg={4} key={dataset.dataset_id}>
+              <Grid item xs={12} md={6} key={dataset.dataset_id}>
                 <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
                   <CardContent sx={{ flexGrow: 1 }}>
                     <Typography variant="h6" component="h2" gutterBottom>
@@ -159,9 +221,41 @@ export default function DatasetsPage() {
                     </Typography>
 
                     {dataset.purpose && (
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        Purpose: {dataset.purpose}
-                      </Typography>
+                      <Box sx={{ mb: 2 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <Typography variant="subtitle2" gutterBottom>
+                            Purpose:
+                          </Typography>
+                          {shouldTruncatePurpose(dataset.purpose) && (
+                            <Button
+                              size="small"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                togglePurposeExpansion(dataset.dataset_id);
+                              }}
+                              endIcon={expandedPurposes.has(dataset.dataset_id) ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                              sx={{ p: 0, minWidth: 'auto', fontSize: '0.75rem' }}
+                            >
+                              {expandedPurposes.has(dataset.dataset_id) ? 'Less' : 'More'}
+                            </Button>
+                          )}
+                        </Box>
+                        <Box sx={{ pl: 1 }}>
+                          {!shouldTruncatePurpose(dataset.purpose) ? (
+                            renderPurposeText(dataset.purpose)
+                          ) : expandedPurposes.has(dataset.dataset_id) ? (
+                            <Collapse in={expandedPurposes.has(dataset.dataset_id)}>
+                              {renderPurposeText(dataset.purpose)}
+                            </Collapse>
+                          ) : (
+                            <>
+                              <Typography variant="body2" color="text.secondary">
+                                {getTruncatedPurpose(dataset.purpose)}
+                              </Typography>
+                            </>
+                          )}
+                        </Box>
+                      </Box>
                     )}
 
                     <Box sx={{ mb: 2 }}>

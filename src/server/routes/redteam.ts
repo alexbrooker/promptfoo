@@ -114,7 +114,7 @@ redteamRouter.post('/execute', authenticateSupabaseUser, async (req: Authenticat
     return;
   }
 
-  const { datasetId, providers } = req.body;
+  const { datasetId, providers, target, useOriginalTarget } = req.body;
   
   try {
     // Verify user owns this dataset
@@ -141,12 +141,32 @@ redteamRouter.post('/execute', authenticateSupabaseUser, async (req: Authenticat
     }
 
     // Create execution config using existing dataset
-    const executionConfig = {
-      ...dataset.metadata.original_config,
-      providers: providers || dataset.metadata.original_config.providers,
-      // Use pre-generated tests from dataset
-      tests: dataset.tests,
-    };
+    let executionConfig;
+    
+    if (useOriginalTarget && target) {
+      // Use the provided target configuration (from original config)
+      executionConfig = {
+        ...dataset.metadata.original_config,
+        target: target,
+        // Use pre-generated tests from dataset
+        tests: dataset.tests,
+      };
+    } else if (providers) {
+      // Use provider-based configuration (legacy mode)
+      executionConfig = {
+        ...dataset.metadata.original_config,
+        providers: providers,
+        // Use pre-generated tests from dataset
+        tests: dataset.tests,
+      };
+    } else {
+      // Fallback to original target if available
+      executionConfig = {
+        ...dataset.metadata.original_config,
+        // Use pre-generated tests from dataset
+        tests: dataset.tests,
+      };
+    }
     
     // Enqueue execution job
     const jobId = await userJobManager.enqueueJob(req.user.id, req.user.email || '', executionConfig);

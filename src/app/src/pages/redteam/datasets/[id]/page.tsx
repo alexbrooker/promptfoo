@@ -33,6 +33,12 @@ import {
   PlayArrow as PlayArrowIcon,
   Download as DownloadIcon,
 } from '@mui/icons-material';
+import {
+  FormControlLabel,
+  Checkbox,
+  RadioGroup,
+  Radio,
+} from '@mui/material';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useUserStore } from '../../../../stores/userStore';
 import { callAuthenticatedApi } from '../../../../utils/api';
@@ -67,6 +73,8 @@ export default function DatasetDetailPage() {
   const [executeDialogOpen, setExecuteDialogOpen] = useState(shouldExecute);
   const [executing, setExecuting] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState('');
+  const [useOriginalTarget, setUseOriginalTarget] = useState(true);
+  const [targetSource, setTargetSource] = useState<'original' | 'provider'>('original');
 
   const fetchDataset = async () => {
     if (!user || !datasetId) return;
@@ -92,7 +100,25 @@ export default function DatasetDetailPage() {
   };
 
   const handleExecute = async () => {
-    if (!dataset || !selectedProvider) return;
+    if (!dataset) return;
+    
+    // Determine target configuration
+    let targetConfig;
+    const originalTarget = getTargetConfig();
+    if (targetSource === 'original' && originalTarget) {
+      targetConfig = {
+        target: originalTarget,
+        useOriginalTarget: true,
+      };
+    } else if (targetSource === 'provider' && selectedProvider) {
+      targetConfig = {
+        providers: [selectedProvider],
+        useOriginalTarget: false,
+      };
+    } else {
+      setError('Please select a target configuration');
+      return;
+    }
 
     try {
       setExecuting(true);
@@ -103,7 +129,7 @@ export default function DatasetDetailPage() {
         },
         body: JSON.stringify({
           datasetId: dataset.dataset_id,
-          providers: [selectedProvider],
+          ...targetConfig,
         }),
       });
 
@@ -139,6 +165,15 @@ export default function DatasetDetailPage() {
     fetchDataset();
   }, [user, datasetId]);
 
+  // Set default target source based on dataset metadata
+  useEffect(() => {
+    if (getTargetConfig()) {
+      setTargetSource('original');
+    } else {
+      setTargetSource('provider');
+    }
+  }, [dataset]);
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -151,6 +186,11 @@ export default function DatasetDetailPage() {
 
   const formatPluginName = (plugin: string) => {
     return plugin.replace(/^redteam:/, '').replace(/-/g, ' ');
+  };
+
+  // Helper to get target configuration (handles both target and targets[0])
+  const getTargetConfig = () => {
+    return dataset?.metadata?.original_config?.target || dataset?.metadata?.original_config?.targets?.[0];
   };
 
   if (loading) {
@@ -341,35 +381,125 @@ export default function DatasetDetailPage() {
         </Grid>
 
         {/* Execute Dialog */}
-        <Dialog open={executeDialogOpen} onClose={() => setExecuteDialogOpen(false)} maxWidth="sm" fullWidth>
+        <Dialog open={executeDialogOpen} onClose={() => setExecuteDialogOpen(false)} maxWidth="md" fullWidth>
           <DialogTitle>Execute Test Dataset</DialogTitle>
           <DialogContent>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              Select an AI provider to test against this dataset of {dataset.test_count} test cases.
+              Execute this dataset of {dataset.test_count} test cases against a target configuration.
             </Typography>
             
-            <FormControl fullWidth>
-              <InputLabel id="provider-select-label">AI Provider</InputLabel>
-              <Select
-                labelId="provider-select-label"
-                value={selectedProvider}
-                label="AI Provider"
-                onChange={(e) => setSelectedProvider(e.target.value)}
-              >
-                <MenuItem value="openai:gpt-4">OpenAI GPT-4</MenuItem>
-                <MenuItem value="openai:gpt-3.5-turbo">OpenAI GPT-3.5 Turbo</MenuItem>
-                <MenuItem value="anthropic:claude-3-opus">Anthropic Claude 3 Opus</MenuItem>
-                <MenuItem value="anthropic:claude-3-sonnet">Anthropic Claude 3 Sonnet</MenuItem>
-                <MenuItem value="anthropic:claude-3-haiku">Anthropic Claude 3 Haiku</MenuItem>
-              </Select>
-            </FormControl>
+            <RadioGroup
+              value={targetSource}
+              onChange={(e) => setTargetSource(e.target.value as 'original' | 'provider')}
+              sx={{ mb: 3 }}
+            >
+              {getTargetConfig() && (
+                <FormControlLabel
+                  value="original"
+                  control={<Radio />}
+                  label={
+                    <Box>
+                      <Typography variant="subtitle2">
+                        Use Original Target Configuration
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {getTargetConfig()?.label || getTargetConfig()?.id || 'Custom Target'}
+                      </Typography>
+                    </Box>
+                  }
+                />
+              )}
+              <FormControlLabel
+                value="provider"
+                control={<Radio />}
+                label={
+                  <Box>
+                    <Typography variant="subtitle2">
+                      Choose AI Provider
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Select from available model providers
+                    </Typography>
+                  </Box>
+                }
+              />
+            </RadioGroup>
+
+            {/* Original Target Details */}
+            {targetSource === 'original' && getTargetConfig() && (
+              <Paper sx={{ p: 2, mb: 3, backgroundColor: 'grey.50' }}>
+                <Typography variant="h6" gutterBottom>
+                  Target Configuration
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} sm={6}>
+                    <Typography variant="subtitle2" color="text.secondary">
+                      Target Name
+                    </Typography>
+                    <Typography variant="body2">
+                      {getTargetConfig()?.label || 'Unnamed Target'}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <Typography variant="subtitle2" color="text.secondary">
+                      Target Type
+                    </Typography>
+                    <Typography variant="body2">
+                      {getTargetConfig()?.id || 'Unknown'}
+                    </Typography>
+                  </Grid>
+                  {getTargetConfig()?.config?.url && (
+                    <Grid item xs={12}>
+                      <Typography variant="subtitle2" color="text.secondary">
+                        Endpoint URL
+                      </Typography>
+                      <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.9rem' }}>
+                        {getTargetConfig()?.config?.url}
+                      </Typography>
+                    </Grid>
+                  )}
+                  {dataset.metadata.purpose && (
+                    <Grid item xs={12}>
+                      <Typography variant="subtitle2" color="text.secondary">
+                        System Purpose
+                      </Typography>
+                      <Typography variant="body2">
+                        {dataset.metadata.purpose}
+                      </Typography>
+                    </Grid>
+                  )}
+                </Grid>
+              </Paper>
+            )}
+            
+            {/* Provider Selection */}
+            {targetSource === 'provider' && (
+              <FormControl fullWidth>
+                <InputLabel id="provider-select-label">AI Provider</InputLabel>
+                <Select
+                  labelId="provider-select-label"
+                  value={selectedProvider}
+                  label="AI Provider"
+                  onChange={(e) => setSelectedProvider(e.target.value)}
+                >
+                  <MenuItem value="openai:gpt-4">OpenAI GPT-4</MenuItem>
+                  <MenuItem value="openai:gpt-3.5-turbo">OpenAI GPT-3.5 Turbo</MenuItem>
+                  <MenuItem value="anthropic:claude-3-opus">Anthropic Claude 3 Opus</MenuItem>
+                  <MenuItem value="anthropic:claude-3-sonnet">Anthropic Claude 3 Sonnet</MenuItem>
+                  <MenuItem value="anthropic:claude-3-haiku">Anthropic Claude 3 Haiku</MenuItem>
+                </Select>
+              </FormControl>
+            )}
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setExecuteDialogOpen(false)}>Cancel</Button>
             <Button
               onClick={handleExecute}
               variant="contained"
-              disabled={!selectedProvider || executing}
+              disabled={(
+                (targetSource === 'provider' && !selectedProvider) ||
+                (targetSource === 'original' && !getTargetConfig())
+              ) || executing}
               startIcon={executing ? <CircularProgress size={20} /> : <PlayArrowIcon />}
             >
               {executing ? 'Starting...' : 'Execute Tests'}

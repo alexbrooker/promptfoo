@@ -172,14 +172,14 @@ export default function Sidebar() {
 
           <SidebarSection title="Compliance" divider>
             <SidebarItem
-              icon={<Dataset />}
-              label="My Datasets"
-              href="/redteam/datasets"
+              icon={<Description />}
+              label="Plans"
+              href="/test-plans"
             />
             <SidebarItem
-              icon={<Description />}
-              label="Test Plans"
-              href="/test-plans"
+              icon={<Dataset />}
+              label="Specs"
+              href="/redteam/datasets"
             />
             <SidebarItem
               icon={<Assessment />}
