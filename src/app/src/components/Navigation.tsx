@@ -16,8 +16,8 @@ import Toolbar from '@mui/material/Toolbar';
 import Tooltip from '@mui/material/Tooltip';
 import Chip from '@mui/material/Chip';
 import { styled } from '@mui/material/styles';
-import { useUIStore } from '../stores/uiStore';
 import { useUserStore } from '../stores/userStore';
+import ApiSettingsModal from './ApiSettingsModal';
 import DarkMode from './DarkMode';
 import InfoModal from './InfoModal';
 import Logo from './Logo';
@@ -156,9 +156,9 @@ export default function Navigation({
   onToggleDarkMode: () => void;
 }) {
   const [showInfoModal, setShowInfoModal] = useState<boolean>(false);
-  const isNavbarVisible = useUIStore((state) => state.isNavbarVisible);
   const { user, signOut, onboardingData } = useUserStore();
   const navigate = useNavigate();
+  const [showApiSettingsModal, setShowApiSettingsModal] = useState<boolean>(false);
 
   const handleModalToggle = () => setShowInfoModal((prevState) => !prevState);
 
@@ -170,10 +170,6 @@ export default function Navigation({
       console.error('Error signing out:', error);
     }
   };
-
-  if (!isNavbarVisible) {
-    return null;
-  }
 
   return (
     <>
