@@ -191,7 +191,6 @@ function generateConnectedSystems(industry?: string, useCase?: string): string {
 
 // Quick scan optimized run settings
 export const QUICK_SCAN_RUN_SETTINGS = {
-  numTests: 10,          // Fixed number of tests per plugin
   maxConcurrency: 3,     // Moderate concurrency for speed vs stability
   delayMs: 500,          // 500ms delay to avoid rate limits
   debugMode: false,      // Disable debug for cleaner output
@@ -214,7 +213,7 @@ export function customizeQuickScanConfig(
       ...DEFAULT_HTTP_TARGET,
       label: customization.targetLabel,
     },
-    numTests: QUICK_SCAN_RUN_SETTINGS.numTests, // Fixed for quick scan
+    // Keep the baseTemplate's numTests or use the default from config
   };
 }
 

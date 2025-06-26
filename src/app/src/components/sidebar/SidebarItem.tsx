@@ -23,12 +23,15 @@ interface SidebarItemProps {
   disabled?: boolean;
 }
 
-const RouterLink = forwardRef<HTMLAnchorElement, LinkProps>((props, ref) => (
-  <Link ref={ref} {...props} />
-));
+const RouterLink = forwardRef<HTMLAnchorElement, LinkProps & { active?: boolean; isSubItem?: boolean; isExpanded?: boolean }>((props, ref) => {
+  const { active, isSubItem, isExpanded, ...linkProps } = props;
+  return <Link ref={ref} {...linkProps} />;
+});
 RouterLink.displayName = 'RouterLink';
 
-const StyledListItemButton = styled(ListItemButton)<{ 
+const StyledListItemButton = styled(ListItemButton, {
+  shouldForwardProp: (prop) => !['active', 'isSubItem', 'isExpanded'].includes(prop as string),
+})<{ 
   active?: boolean; 
   isSubItem?: boolean;
   isExpanded?: boolean;
@@ -76,7 +79,9 @@ const StyledListItemButton = styled(ListItemButton)<{
   }),
 }));
 
-const StyledListItemIcon = styled(ListItemIcon)<{ isExpanded?: boolean }>(({ theme, isExpanded }) => ({
+const StyledListItemIcon = styled(ListItemIcon, {
+  shouldForwardProp: (prop) => prop !== 'isExpanded',
+})<{ isExpanded?: boolean }>(({ theme, isExpanded }) => ({
   minWidth: isExpanded ? 40 : 24,
   transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
   color: 'inherit',

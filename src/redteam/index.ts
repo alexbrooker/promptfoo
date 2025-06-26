@@ -33,6 +33,7 @@ import { loadStrategy, Strategies, validateStrategies } from './strategies';
 import { DEFAULT_LANGUAGES } from './strategies/multilingual';
 import type { RedteamStrategyObject, SynthesizeOptions } from './types';
 import { extractGoalFromPrompt, getShortPluginId } from './util';
+import { ProgressReporter, type ProgressCallback } from './util/progress';
 
 /**
  * Gets the severity level for a plugin based on its ID and configuration.
@@ -224,6 +225,7 @@ async function applyStrategies(
   strategies: RedteamStrategyObject[],
   injectVar: string,
   excludeTargetOutputFromAgenticAttackGeneration?: boolean,
+  progressReporter?: ProgressReporter,
 ): Promise<{
   testCases: TestCaseWithPlugin[];
   strategyResults: Record<string, { requested: number; generated: number }>;
@@ -231,17 +233,33 @@ async function applyStrategies(
   const newTestCases: TestCaseWithPlugin[] = [];
   const strategyResults: Record<string, { requested: number; generated: number }> = {};
 
-  for (const strategy of strategies) {
-    logger.debug(`Generating ${strategy.id} tests`);
+  if (strategies.length === 0) {
+    return { testCases: newTestCases, strategyResults };
+  }
+
+  logger.info(`Applying ${strategies.length} strategies to ${testCases.length} test cases...`);
+
+  for (let i = 0; i < strategies.length; i++) {
+    const strategy = strategies[i];
+    const strategyIndex = i + 1;
+    
+    logger.info(`[Strategy ${strategyIndex}/${strategies.length}] Applying ${strategy.id}...`);
+    progressReporter?.reportStrategyProgress(
+      strategy.id,
+      `Processing strategy ${strategyIndex}/${strategies.length}`,
+      i,
+      strategies.length
+    );
 
     let strategyAction;
     if (strategy.id.startsWith('file://')) {
+      logger.debug(`[${strategy.id}] Loading custom strategy...`);
       const loadedStrategy = await loadStrategy(strategy.id);
       strategyAction = loadedStrategy.action;
     } else {
       const builtinStrategy = Strategies.find((s) => s.id === strategy.id);
       if (!builtinStrategy) {
-        logger.warn(`Strategy ${strategy.id} not registered, skipping`);
+        logger.warn(`[${strategy.id}] Strategy not registered, skipping`);
         continue;
       }
       strategyAction = builtinStrategy.action;
@@ -251,7 +269,9 @@ async function applyStrategies(
     const applicableTestCases = testCases.filter((t) =>
       pluginMatchesStrategyTargets(t, targetPlugins),
     );
-
+    
+    logger.debug(`[${strategy.id}] Processing ${applicableTestCases.length} applicable test cases`);
+    
     const strategyTestCases: TestCase[] = await strategyAction(applicableTestCases, injectVar, {
       ...(strategy.config || {}),
       excludeTargetOutputFromAgenticAttackGeneration,
@@ -287,8 +307,17 @@ async function applyStrategies(
         generated: strategyTestCases.length,
       };
     }
+    
+    logger.info(`[${strategy.id}] Generated ${strategyTestCases.length} transformed test cases`);
+    progressReporter?.reportStrategyProgress(
+      strategy.id,
+      `Completed ${strategy.id}`,
+      strategyIndex,
+      strategies.length
+    );
   }
 
+  logger.info(`Strategy application completed: ${newTestCases.length} total test cases generated`);
   return { testCases: newTestCases, strategyResults };
 }
 
@@ -649,9 +678,10 @@ export async function synthesize({
     }
   }
 
-  // Start the progress bar
+  // Initialize progress reporting
   let progressBar: cliProgress.SingleBar | null = null;
   const isWebUI = Boolean(cliState.webUI);
+  const progressReporter = new ProgressReporter();
 
   const showProgressBar =
     !isWebUI &&
@@ -668,6 +698,8 @@ export async function synthesize({
     );
     progressBar.start(totalPluginTests + 2, 0, { task: 'Initializing' });
   }
+  
+  progressReporter.reportProgress('initialization', 'Starting synthesis process', 0, totalTests);
 
   // Replace progress bar updates with logger calls when in web UI
   if (showProgressBar) {
@@ -675,21 +707,44 @@ export async function synthesize({
   } else {
     logger.info('Extracting system purpose...');
   }
+  
+  progressReporter.reportProgress('initialization', 'Extracting system purpose from prompts...', 1, totalTests);
+  logger.info('🔍 Analyzing prompts to extract system purpose (this may take a moment)...');
+  
+  const purposeStartTime = Date.now();
   const purpose = purposeOverride || (await extractSystemPurpose(redteamProvider, prompts));
+  const purposeElapsed = Date.now() - purposeStartTime;
+  
+  logger.info(`✅ System purpose extracted in ${Math.round(purposeElapsed / 1000)}s: "${purpose.substring(0, 100)}${purpose.length > 100 ? '...' : ''}"`);
+  progressReporter.reportProgress('initialization', 'System purpose extracted', 2, totalTests);
 
   if (showProgressBar) {
     progressBar?.increment(1, { task: 'Extracting entities' });
   } else {
     logger.info('Extracting entities...');
   }
+  
+  progressReporter.reportProgress('initialization', 'Extracting entities from prompts...', 3, totalTests);
+  logger.info('🔍 Analyzing prompts to extract entities (this may take a moment)...');
+  
+  const entitiesStartTime = Date.now();
   const entities: string[] = Array.isArray(entitiesOverride)
     ? entitiesOverride
     : await extractEntities(redteamProvider, prompts);
+  const entitiesElapsed = Date.now() - entitiesStartTime;
+  
+  logger.info(`✅ Entities extracted in ${Math.round(entitiesElapsed / 1000)}s: [${entities.slice(0, 5).join(', ')}${entities.length > 5 ? `, +${entities.length - 5} more` : ''}]`);
+  progressReporter.reportProgress('initialization', 'Entities extracted', 4, totalTests);
 
   logger.debug(`System purpose: ${purpose}`);
 
+  logger.info(`🚀 Starting plugin generation phase: ${plugins.length} plugins, ${totalPluginTests} total tests`);
+  progressReporter.reportProgress('plugin_generation', 'Starting plugin test generation', 5, totalTests);
+
   const pluginResults: Record<string, { requested: number; generated: number }> = {};
   const testCases: TestCaseWithPlugin[] = [];
+  let completedPlugins = 0;
+  
   await async.forEachLimit(plugins, maxConcurrency, async (plugin) => {
     // Check for abort signal before generating tests
     checkAbort();
@@ -735,19 +790,45 @@ export async function synthesize({
           },
         }));
 
-        // Extract goal for this plugin's tests
-        logger.debug(
-          `Extracting goal for ${testCasesWithMetadata.length} tests from ${plugin.id}...`,
-        );
-        for (const testCase of testCasesWithMetadata) {
-          // Get the prompt from the specific inject variable
-          const promptVar = testCase.vars?.[injectVar];
-          const prompt = Array.isArray(promptVar) ? promptVar[0] : String(promptVar);
-
-          const extractedGoal = await extractGoalFromPrompt(prompt, purpose, plugin.id);
-
-          (testCase.metadata as any).goal = extractedGoal;
+        // Extract goals for this plugin's tests in parallel batches
+        logger.info(`[${plugin.id}] Extracting goals for ${testCasesWithMetadata.length} tests in parallel...`);
+        const goalStartTime = Date.now();
+        
+        const batchSize = 10; // Process goals in batches of 10
+        const goalPromises: Promise<void>[] = [];
+        
+        for (let i = 0; i < testCasesWithMetadata.length; i += batchSize) {
+          const batch = testCasesWithMetadata.slice(i, i + batchSize);
+          const batchNumber = Math.floor(i / batchSize) + 1;
+          const totalBatches = Math.ceil(testCasesWithMetadata.length / batchSize);
+          
+          logger.debug(`[${plugin.id}] Processing goal extraction batch ${batchNumber}/${totalBatches} (${batch.length} tests)...`);
+          
+          const batchPromise = Promise.all(
+            batch.map(async (testCase, index) => {
+              try {
+                // Get the prompt from the specific inject variable
+                const promptVar = testCase.vars?.[injectVar];
+                const prompt = Array.isArray(promptVar) ? promptVar[0] : String(promptVar);
+                
+                const extractedGoal = await extractGoalFromPrompt(prompt, purpose, plugin.id);
+                (testCase.metadata as any).goal = extractedGoal;
+              } catch (error) {
+                logger.warn(`[${plugin.id}] Failed to extract goal for test ${i + index + 1}: ${error}`);
+                (testCase.metadata as any).goal = 'Goal extraction failed';
+              }
+            })
+          ).then(() => {
+            logger.debug(`[${plugin.id}] Completed goal extraction batch ${batchNumber}/${totalBatches}`);
+          });
+          
+          goalPromises.push(batchPromise);
         }
+        
+        // Wait for all batches to complete
+        await Promise.all(goalPromises);
+        const goalElapsed = Date.now() - goalStartTime;
+        logger.info(`[${plugin.id}] ✅ Goal extraction completed in ${Math.round(goalElapsed / 1000)}s for ${testCasesWithMetadata.length} tests`);
 
         // Add the results to main test cases array
         testCases.push(...testCasesWithMetadata);
@@ -781,19 +862,45 @@ export async function synthesize({
           },
         }));
 
-        // Extract goal for this plugin's tests
-        logger.debug(
-          `Extracting goal for ${testCasesWithMetadata.length} custom tests from ${plugin.id}...`,
-        );
-        for (const testCase of testCasesWithMetadata) {
-          // Get the prompt from the specific inject variable
-          const promptVar = testCase.vars?.[injectVar];
-          const prompt = Array.isArray(promptVar) ? promptVar[0] : String(promptVar);
-
-          const extractedGoal = await extractGoalFromPrompt(prompt, purpose, plugin.id);
-
-          (testCase.metadata as any).goal = extractedGoal;
+        // Extract goals for this custom plugin's tests in parallel batches
+        logger.info(`[${plugin.id}] Extracting goals for ${testCasesWithMetadata.length} custom tests in parallel...`);
+        const goalStartTime = Date.now();
+        
+        const batchSize = 10; // Process goals in batches of 10
+        const goalPromises: Promise<void>[] = [];
+        
+        for (let i = 0; i < testCasesWithMetadata.length; i += batchSize) {
+          const batch = testCasesWithMetadata.slice(i, i + batchSize);
+          const batchNumber = Math.floor(i / batchSize) + 1;
+          const totalBatches = Math.ceil(testCasesWithMetadata.length / batchSize);
+          
+          logger.debug(`[${plugin.id}] Processing goal extraction batch ${batchNumber}/${totalBatches} (${batch.length} tests)...`);
+          
+          const batchPromise = Promise.all(
+            batch.map(async (testCase, index) => {
+              try {
+                // Get the prompt from the specific inject variable
+                const promptVar = testCase.vars?.[injectVar];
+                const prompt = Array.isArray(promptVar) ? promptVar[0] : String(promptVar);
+                
+                const extractedGoal = await extractGoalFromPrompt(prompt, purpose, plugin.id);
+                (testCase.metadata as any).goal = extractedGoal;
+              } catch (error) {
+                logger.warn(`[${plugin.id}] Failed to extract goal for custom test ${i + index + 1}: ${error}`);
+                (testCase.metadata as any).goal = 'Goal extraction failed';
+              }
+            })
+          ).then(() => {
+            logger.debug(`[${plugin.id}] Completed goal extraction batch ${batchNumber}/${totalBatches}`);
+          });
+          
+          goalPromises.push(batchPromise);
         }
+        
+        // Wait for all batches to complete
+        await Promise.all(goalPromises);
+        const goalElapsed = Date.now() - goalStartTime;
+        logger.info(`[${plugin.id}] ✅ Custom goal extraction completed in ${Math.round(goalElapsed / 1000)}s for ${testCasesWithMetadata.length} tests`);
 
         // Add the results to main test cases array
         testCases.push(...testCasesWithMetadata);
@@ -809,7 +916,16 @@ export async function synthesize({
       pluginResults[plugin.id] = { requested: plugin.numTests, generated: 0 };
       progressBar?.increment(plugin.numTests);
     }
+    
+    // Update completion tracking
+    completedPlugins++;
+    const pluginProgress = Math.round((completedPlugins / plugins.length) * 100);
+    logger.info(`📊 Plugin progress: ${completedPlugins}/${plugins.length} (${pluginProgress}%) - Latest: ${plugin.id}`);
+    progressReporter.reportProgress('plugin_generation', `Completed ${completedPlugins}/${plugins.length} plugins`, completedPlugins * 10, totalTests);
   });
+
+  logger.info(`✅ Plugin generation completed: ${testCases.length} test cases generated from ${plugins.length} plugins`);
+  progressReporter.reportProgress('plugin_generation', 'All plugins completed', plugins.length * 10, totalTests);
 
   // After generating plugin test cases but before applying strategies:
   const pluginTestCases = testCases;
@@ -820,7 +936,7 @@ export async function synthesize({
   // Apply retry strategy first if it exists
   const retryStrategy = strategies.find((s) => s.id === 'retry');
   if (retryStrategy) {
-    logger.debug('Applying retry strategy first');
+    logger.info('Applying retry strategy first...');
     retryStrategy.config = {
       targetLabels,
       ...retryStrategy.config,
@@ -829,6 +945,8 @@ export async function synthesize({
       pluginTestCases,
       [retryStrategy],
       injectVar,
+      undefined,
+      progressReporter,
     );
     pluginTestCases.push(...retryTestCases);
     Object.assign(strategyResults, retryResults);
@@ -836,24 +954,34 @@ export async function synthesize({
 
   // Check for abort signal or apply non-basic, non-multilingual strategies
   checkAbort();
+  const nonBasicStrategies = strategies.filter((s) => !['basic', 'multilingual', 'retry'].includes(s.id));
   const { testCases: strategyTestCases, strategyResults: otherStrategyResults } =
     await applyStrategies(
       pluginTestCases,
-      strategies.filter((s) => !['basic', 'multilingual', 'retry'].includes(s.id)),
+      nonBasicStrategies,
       injectVar,
       excludeTargetOutputFromAgenticAttackGeneration,
+      progressReporter,
     );
 
   Object.assign(strategyResults, otherStrategyResults);
 
   // Combine test cases based on basic strategy setting
   const finalTestCases = [...(includeBasicTests ? pluginTestCases : []), ...strategyTestCases];
+  
+  progressReporter.reportProgress(
+    'strategy_application',
+    `Combined ${pluginTestCases.length} plugin tests with ${strategyTestCases.length} strategy tests`,
+    finalTestCases.length,
+    totalTests
+  );
 
   // Check for abort signal or apply multilingual strategy to all test cases
   checkAbort();
   if (multilingualStrategy) {
+    logger.info('Applying multilingual strategy to all test cases...');
     const { testCases: multiLingualTestCases, strategyResults: multiLingualResults } =
-      await applyStrategies(finalTestCases, [multilingualStrategy], injectVar);
+      await applyStrategies(finalTestCases, [multilingualStrategy], injectVar, undefined, progressReporter);
     finalTestCases.push(...multiLingualTestCases);
     Object.assign(strategyResults, multiLingualResults);
   }

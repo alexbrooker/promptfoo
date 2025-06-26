@@ -19,6 +19,7 @@ import { extractVariablesFromTemplate, getNunjucksEngine } from '../../util/temp
 import { sleep } from '../../util/time';
 import { redteamProviderManager } from '../providers/shared';
 import { getShortPluginId, isBasicRefusal, isEmptyResponse, removePrefix } from '../util';
+import { ProgressReporter, type ProgressCallback } from '../util/progress';
 
 /**
  * Parses the LLM response of generated prompts into an array of objects.
@@ -80,20 +81,25 @@ export abstract class RedteamPluginBase {
    */
   readonly canGenerateRemote: boolean = true;
 
+  protected progressReporter?: ProgressReporter;
+
   /**
    * Creates an instance of RedteamPluginBase.
    * @param provider - The API provider used for generating prompts.
    * @param purpose - The purpose of the plugin.
    * @param injectVar - The variable name to inject the generated prompt into.
    * @param config - An optional object of plugin configuration.
+   * @param progressCallback - Optional callback for progress updates.
    */
   constructor(
     protected provider: ApiProvider,
     protected purpose: string,
     protected injectVar: string,
     protected config: PluginConfig = {},
+    progressCallback?: ProgressCallback,
   ) {
     logger.debug(`RedteamPluginBase initialized with purpose: ${purpose}, injectVar: ${injectVar}`);
+    this.progressReporter = progressCallback ? new ProgressReporter(progressCallback) : undefined;
   }
 
   /**
@@ -120,8 +126,13 @@ export abstract class RedteamPluginBase {
     delayMs: number = 0,
     templateGetter: () => Promise<string> = this.getTemplate.bind(this),
   ): Promise<TestCase[]> {
-    logger.debug(`Generating ${n} test cases`);
-    const batchSize = 20;
+    const pluginName = this.constructor.name;
+    logger.info(`[${this.id}] Starting generation of ${n} test cases...`);
+    this.progressReporter?.reportPluginProgress(this.id, 'Initializing test generation', 0, n);
+    
+    const batchSize = Math.min(20, Math.max(5, Math.floor(n / 8))); // Adaptive batch size
+    const batches = Math.ceil(n / batchSize);
+    logger.debug(`[${this.id}] Processing ${batches} batches of up to ${batchSize} prompts each`);
 
     /**
      * Generates a batch of prompts using the API provider.
@@ -133,46 +144,105 @@ export abstract class RedteamPluginBase {
     ): Promise<{ prompt: string }[]> => {
       const remainingCount = n - currentPrompts.length;
       const currentBatchSize = Math.min(remainingCount, batchSize);
+      const currentBatch = Math.floor(currentPrompts.length / batchSize) + 1;
 
-      logger.debug(`Generating batch of ${currentBatchSize} prompts`);
+      logger.debug(`[${this.id}] Processing batch ${currentBatch}/${batches} - generating ${currentBatchSize} prompts`);
+      this.progressReporter?.reportPluginProgress(
+        this.id, 
+        `Processing batch ${currentBatch}/${batches}`, 
+        currentPrompts.length, 
+        n
+      );
+      
       const nunjucks = getNunjucksEngine();
+      
+      // Add variety to prompt generation to avoid duplicates
+      const attemptNumber = Math.floor(currentPrompts.length / batchSize) + 1;
+      const varietyPrompts = [
+        'Generate diverse and creative test prompts',
+        'Create unique and varied prompts',
+        'Develop distinct and innovative test cases',
+        'Produce original and different prompts',
+        'Generate creative and unique test scenarios'
+      ];
+      
       const renderedTemplate = nunjucks.renderString(await templateGetter(), {
         purpose: this.purpose,
         n: currentBatchSize,
         examples: this.config.examples,
+        attempt: attemptNumber,
+        varietyInstruction: varietyPrompts[attemptNumber % varietyPrompts.length],
+        existingCount: currentPrompts.length,
       });
 
-      const finalTemplate = RedteamPluginBase.appendModifiers(renderedTemplate, this.config);
+      let finalTemplate = RedteamPluginBase.appendModifiers(renderedTemplate, this.config);
+      
+      // Add variety instructions to prevent duplicates
+      if (attemptNumber > 1) {
+        finalTemplate += `\n\nIMPORTANT: This is attempt ${attemptNumber}. Generate prompts that are completely different from previous attempts. Avoid repetition and ensure maximum variety and creativity.`;
+      }
+      
+      logger.debug(`[${this.id}] Making API call to generate ${currentBatchSize} prompts...`);
       const { output: generatedPrompts, error } = await this.provider.callApi(finalTemplate);
+      
       if (delayMs > 0) {
-        logger.debug(`Delaying for ${delayMs}ms`);
+        logger.debug(`[${this.id}] Delaying for ${delayMs}ms`);
         await sleep(delayMs);
       }
 
       if (error) {
         logger.error(
-          `Error from API provider, skipping generation for ${this.constructor.name}: ${error}`,
+          `[${this.id}] Error from API provider, skipping generation: ${error}`,
         );
         return [];
       }
 
       if (typeof generatedPrompts !== 'string') {
         logger.error(
-          `Malformed response from API provider: Expected generatedPrompts to be a string, got ${typeof generatedPrompts}: ${JSON.stringify(generatedPrompts)}`,
+          `[${this.id}] Malformed response from API provider: Expected string, got ${typeof generatedPrompts}: ${JSON.stringify(generatedPrompts)}`,
         );
         return [];
       }
-      return parseGeneratedPrompts(generatedPrompts);
+      
+      logger.debug(`[${this.id}] Received response, parsing prompts...`);
+      const parsed = parseGeneratedPrompts(generatedPrompts);
+      logger.debug(`[${this.id}] Batch ${currentBatch} generated ${parsed.length} prompts`);
+      
+      return parsed;
     };
-    const allPrompts = await retryWithDeduplication(generatePrompts, n);
+    
+    // Custom deduplication function that's less aggressive for prompts
+    const promptDedupFn = (items: { prompt: string }[]) => {
+      const seen = new Set<string>();
+      return items.filter(item => {
+        const normalizedPrompt = item.prompt.toLowerCase().trim().replace(/\s+/g, ' ');
+        if (seen.has(normalizedPrompt)) {
+          return false;
+        }
+        seen.add(normalizedPrompt);
+        return true;
+      });
+    };
+    
+    const allPrompts = await retryWithDeduplication(generatePrompts, n, 5, promptDedupFn, this.progressReporter, this.id);
     const prompts = sampleArray(allPrompts, n);
-    logger.debug(`${this.constructor.name} generated test cases from ${prompts.length} prompts`);
+    
+    logger.info(`[${this.id}] Completed: ${prompts.length}/${n} prompts generated`);
+    this.progressReporter?.reportPluginProgress(this.id, 'Converting to test cases', prompts.length, n);
 
     if (prompts.length !== n) {
-      logger.warn(`Expected ${n} prompts, got ${prompts.length} for ${this.constructor.name}`);
+      const successRate = Math.round((prompts.length / n) * 100);
+      if (prompts.length < n * 0.5) {
+        logger.warn(`[${this.id}] Low generation success rate: ${successRate}% (${prompts.length}/${n}). Consider reviewing the plugin template or LLM settings.`);
+      } else {
+        logger.warn(`[${this.id}] Expected ${n} prompts, got ${prompts.length} (${successRate}% success rate)`);
+      }
     }
 
-    return this.promptsToTestCases(prompts);
+    const testCases = this.promptsToTestCases(prompts);
+    this.progressReporter?.reportPluginProgress(this.id, 'Test generation completed', n, n);
+    
+    return testCases;
   }
 
   /**
@@ -181,6 +251,7 @@ export abstract class RedteamPluginBase {
    * @returns An array of test cases.
    */
   protected promptsToTestCases(prompts: { prompt: string }[]): TestCase[] {
+    logger.debug(`[${this.id}] Converting ${prompts.length} prompts to test cases`);
     return prompts.sort().map((prompt) => ({
       vars: {
         [this.injectVar]: prompt.prompt,

@@ -11,6 +11,7 @@ import DownloadIcon from '@mui/icons-material/Download';
 import PluginIcon from '@mui/icons-material/Extension';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import TargetIcon from '@mui/icons-material/GpsFixed';
+import InfoIcon from '@mui/icons-material/Info';
 import StrategyIcon from '@mui/icons-material/Psychology';
 import ReviewIcon from '@mui/icons-material/RateReview';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
@@ -267,7 +268,7 @@ export default function RedTeamSetupPage() {
 
   const { hasSeenSetup, markSetupAsSeen } = useSetupState();
   const [setupModalOpen, setSetupModalOpen] = useState(!hasSeenSetup);
-  const { config, setFullConfig, resetConfig, loadConfig, setConfigId } = useRedTeamConfig();
+  const { config, setFullConfig, resetConfig, loadConfig, setConfigId, configId } = useRedTeamConfig();
 
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [loadDialogOpen, setLoadDialogOpen] = useState(false);
@@ -290,7 +291,7 @@ export default function RedTeamSetupPage() {
     const hash = location.hash.replace('#', '');
     if (hash) {
       const newValue = Number.parseInt(hash, 10);
-      if (!Number.isNaN(newValue) && newValue >= 0 && newValue <= 3) {
+      if (!Number.isNaN(newValue) && newValue >= 0 && newValue <= 4) {
         setValue(newValue);
       } else {
         setValue(0);
@@ -378,29 +379,51 @@ export default function RedTeamSetupPage() {
       targetType: config.target.id,
     });
     try {
-      const response = await callAuthenticatedApi('/configs', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: configName,
-          type: 'redteam',
-          config,
-        }),
-      });
+      let response;
+      if (configId) {
+        // Update existing config
+        response = await callAuthenticatedApi(`/configs/redteam/${configId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            name: configName,
+            config,
+          }),
+        });
+      } else {
+        // Create new config
+        response = await callAuthenticatedApi('/configs', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            name: configName,
+            type: 'redteam',
+            config,
+          }),
+        });
+      }
+      
       const data = await response.json();
 
       if (data.error) {
         throw new Error(data.error);
       }
 
-      toast.showToast('Configuration saved successfully', 'success');
+      toast.showToast(`Configuration ${configId ? 'updated' : 'saved'} successfully`, 'success');
       setSaveDialogOpen(false);
       lastSavedConfig.current = JSON.stringify(config);
       setHasUnsavedChanges(false);
       setConfigName(configName);
-      setConfigDate(data.createdAt);
+      setConfigDate(data.updatedAt || data.createdAt);
+      
+      // Set configId if this was a new config
+      if (!configId && data.id) {
+        setConfigId(data.id);
+      }
     } catch (error) {
       console.error('Failed to save configuration', error);
       toast.showToast(
@@ -552,6 +575,7 @@ export default function RedTeamSetupPage() {
   const handleResetConfig = () => {
     resetConfig();
     setConfigName('');
+    setConfigDate(null);
     lastSavedConfig.current = '';
     setHasUnsavedChanges(false);
     setResetDialogOpen(false);
@@ -606,7 +630,7 @@ export default function RedTeamSetupPage() {
                     onClick={handleSaveConfig}
                     disabled={!configName}
                   >
-                    Save now
+                    {configId ? 'Update now' : 'Save now'}
                   </Button>
                 </div>
               ) : (
@@ -625,28 +649,34 @@ export default function RedTeamSetupPage() {
                 onChange={handleChange}
               >
                 <StyledTab
+                  icon={<InfoIcon />}
+                  iconPosition="start"
+                  label="Usage Details"
+                  {...a11yProps(0)}
+                />
+                <StyledTab
                   icon={<TargetIcon />}
                   iconPosition="start"
                   label="Targets"
-                  {...a11yProps(0)}
+                  {...a11yProps(1)}
                 />
                 <StyledTab
                   icon={<PluginIcon />}
                   iconPosition="start"
                   label={`Plugins${config.plugins?.length ? ` (${config.plugins.length})` : ''}`}
-                  {...a11yProps(1)}
+                  {...a11yProps(2)}
                 />
                 <StyledTab
                   icon={<StrategyIcon />}
                   iconPosition="start"
                   label={`Strategies${config.strategies?.length ? ` (${config.strategies.length})` : ''}`}
-                  {...a11yProps(2)}
+                  {...a11yProps(3)}
                 />
                 <StyledTab
                   icon={<ReviewIcon />}
                   iconPosition="start"
                   label="Review"
-                  {...a11yProps(3)}
+                  {...a11yProps(4)}
                 />
               </StyledTabs>
             </TabsContainer>
@@ -665,7 +695,7 @@ export default function RedTeamSetupPage() {
                 startIcon={<SaveIcon />}
                 onClick={() => setSaveDialogOpen(true)}
               >
-                Save Config
+                {configId ? 'Update Config' : 'Save Config'}
               </SidebarButton>
               <SidebarButton
                 variant="text"
@@ -691,21 +721,26 @@ export default function RedTeamSetupPage() {
         </OuterSidebarContainer>
         <TabContent>
           <CustomTabPanel value={value} index={0}>
+            <ErrorBoundary name="Usage Details Page">
+              <Purpose onNext={handleNext} onBack={handleBack} />
+            </ErrorBoundary>
+          </CustomTabPanel>
+          <CustomTabPanel value={value} index={1}>
             <ErrorBoundary name="Targets Page">
               <Targets onNext={handleNext} onBack={handleBack} setupModalOpen={setupModalOpen} />
             </ErrorBoundary>
           </CustomTabPanel>
-          <CustomTabPanel value={value} index={1}>
+          <CustomTabPanel value={value} index={2}>
             <ErrorBoundary name="Plugins Page">
               <Plugins onNext={handleNext} onBack={handleBack} />
             </ErrorBoundary>
           </CustomTabPanel>
-          <CustomTabPanel value={value} index={2}>
+          <CustomTabPanel value={value} index={3}>
             <ErrorBoundary name="Strategies Page">
               <Strategies onNext={handleNext} onBack={handleBack} />
             </ErrorBoundary>
           </CustomTabPanel>
-          <CustomTabPanel value={value} index={3}>
+          <CustomTabPanel value={value} index={4}>
             <ErrorBoundary name="Review Page">
               <Review />
             </ErrorBoundary>
@@ -721,7 +756,7 @@ export default function RedTeamSetupPage() {
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>Save Configuration</DialogTitle>
+        <DialogTitle>{configId ? 'Update Configuration' : 'Save Configuration'}</DialogTitle>
         <DialogContent>
           <TextField
             autoFocus
@@ -748,7 +783,7 @@ export default function RedTeamSetupPage() {
               disabled={!configName}
               fullWidth
             >
-              Save
+              {configId ? 'Update' : 'Save'}
             </Button>
           </Box>
         </DialogContent>

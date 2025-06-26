@@ -18,6 +18,7 @@ import {
   Help,
   DarkMode,
   LightMode,
+  Dataset,
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import { useSidebarStore } from '../../stores/sidebarStore';
@@ -164,12 +165,17 @@ export default function Sidebar() {
             />
             <SidebarItem
               icon={<Security />}
-              label="Full Setup (Coming Soon)"
-              disabled={true}
+              label="Full Setup"
+              href="/redteam/setup"
             />
           </SidebarSection>
 
           <SidebarSection title="Compliance" divider>
+            <SidebarItem
+              icon={<Dataset />}
+              label="My Datasets"
+              href="/redteam/datasets"
+            />
             <SidebarItem
               icon={<Description />}
               label="Test Plans"

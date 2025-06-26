@@ -31,6 +31,8 @@ import ReportPage from './pages/redteam/report/page';
 import RedteamReportsPage from './pages/redteam/reports/page';
 import RedteamSetupPage from './pages/redteam/setup/page';
 import QuickScanPage from './pages/redteam/quick-scan/page';
+import RedteamDatasetsPage from './pages/redteam/datasets/page';
+import RedteamDatasetDetailPage from './pages/redteam/datasets/[id]/page';
 import SubscriptionPage from './pages/subscription/page';
 import SubscriptionSuccessPage from './pages/subscription/success';
 import SettingsPage from './pages/settings/page';
@@ -99,6 +101,8 @@ const router = createBrowserRouter(
             <Route path="/redteam" element={<Navigate to="/redteam/setup" replace />} />
             <Route path="/redteam/setup" element={<RedteamSetupPage />} />
             <Route path="/redteam/quick-scan" element={<QuickScanPage />} />
+            <Route path="/redteam/datasets" element={<RedteamDatasetsPage />} />
+            <Route path="/redteam/datasets/:id" element={<RedteamDatasetDetailPage />} />
             <Route path="/redteam/reports" element={<RedteamReportsPage />} />
             <Route path="/report" element={<ReportPage />} />
             <Route path="/setup" element={<EvalCreatorPage />} />

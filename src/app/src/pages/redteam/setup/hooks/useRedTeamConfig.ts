@@ -333,27 +333,48 @@ export const useRedTeamConfig = create<RedTeamConfigState>()(
         window.location.reload();
       },
       saveConfig: async (name: string) => {
-        const { config } = get();
+        const { config, configId } = get();
         try {
-          const response = await callAuthenticatedApi('/configs', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              name,
-              type: 'redteam',
-              config,
-            }),
-          });
+          let response;
+          if (configId) {
+            // Update existing config
+            response = await callAuthenticatedApi(`/configs/redteam/${configId}`, {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                name,
+                config,
+              }),
+            });
+          } else {
+            // Create new config
+            response = await callAuthenticatedApi('/configs', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                name,
+                type: 'redteam',
+                config,
+              }),
+            });
+          }
 
           if (!response.ok) {
             throw new Error('Failed to save config');
           }
 
           const result = await response.json();
-          set({ configId: result.id });
-          return result.id;
+          
+          // Set configId if this was a new config
+          if (!configId && result.id) {
+            set({ configId: result.id });
+          }
+          
+          return result.id || configId;
         } catch (error) {
           console.error('Error saving config:', error);
           throw error;

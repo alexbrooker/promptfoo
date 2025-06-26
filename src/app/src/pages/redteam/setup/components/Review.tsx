@@ -12,6 +12,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import SettingsIcon from '@mui/icons-material/Settings';
 import StopIcon from '@mui/icons-material/Stop';
 import VisibilityIcon from '@mui/icons-material/Visibility';
+import BuildIcon from '@mui/icons-material/Build';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -56,11 +57,9 @@ interface JobStatusResponse {
 export default function Review() {
   const { config, updateConfig, saveConfig, configId } = useRedTeamConfig();
   
-  // Quick scan fixed settings
-  const quickScanNumTests = 5;
-  const quickScanMaxConcurrency = '1';
-  const quickScanDelayMs = '1000';
-  const isSubscriber = false; // TODO: Get from user context/subscription status
+  // Default run settings
+  const defaultMaxConcurrency = '1';
+  const defaultDelayMs = '1000';
   const theme = useTheme();
   const { recordEvent } = useTelemetry();
   const [isYamlDialogOpen, setIsYamlDialogOpen] = React.useState(false);
@@ -270,8 +269,84 @@ export default function Review() {
     }
   };
 
+  const handleGenerateOnly = async () => {
+    setIsRunSettingsDialogOpen(false);
+
+    // Check if config is saved first
+    if (!configId) {
+      showToast('Please save your test plan before generating', 'error');
+      return;
+    }
+
+    // Check email verification first
+    const emailResult = await checkEmailStatus();
+
+    if (!emailResult.canProceed) {
+      if (emailResult.needsEmail) {
+        setEmailVerificationMessage(
+          emailResult.status?.message ||
+            'Redteam evals require email verification. Please enter your work email:',
+        );
+        setIsEmailDialogOpen(true);
+        return;
+      } else if (emailResult.error) {
+        setEmailVerificationError(emailResult.error);
+        showToast(emailResult.error, 'error');
+        return;
+      }
+    }
+
+    recordEvent('feature_used', {
+      feature: 'redteam_generate_only',
+      numPlugins: config.plugins.length,
+      numStrategies: config.strategies.length,
+      targetType: config.target.id,
+    });
+
+    setIsRunning(true);
+    setLogs([]);
+
+    try {
+      const response = await callAuthenticatedApi('/redteam/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          config: getUnifiedConfig({
+            ...config,
+            numTests: config.numTests || 5
+          }),
+        }),
+      });
+
+      const result = await response.json();
+      
+      if (result.error) {
+        throw new Error(result.message || 'Generation failed');
+      }
+
+      showToast(`Generated ${result.testCount} test cases successfully!`, 'success');
+      
+      // Navigate to the dataset detail page
+      window.location.href = `/redteam/datasets/${result.datasetId}`;
+      
+    } catch (error) {
+      console.error('Generation failed:', error);
+      showToast(`Generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
   const handleRunWithSettings = async () => {
     setIsRunSettingsDialogOpen(false);
+
+    // Check if config is saved first
+    if (!configId) {
+      showToast('Please save your test plan before running', 'error');
+      return;
+    }
 
     // Check email verification first
     const emailResult = await checkEmailStatus();
@@ -328,12 +403,12 @@ export default function Review() {
         body: JSON.stringify({
           config: getUnifiedConfig({
             ...config,
-            numTests: quickScanNumTests
+            numTests: config.numTests || 5
           }),
           force: forceRegeneration,
           verbose: debugMode,
-          maxConcurrency: quickScanMaxConcurrency,
-          delayMs: quickScanDelayMs,
+          maxConcurrency: maxConcurrency || defaultMaxConcurrency,
+          delayMs: delayMs || defaultDelayMs,
         }),
       });
 
@@ -782,10 +857,10 @@ export default function Review() {
 
         <Box>
           <Typography variant="h5" gutterBottom sx={{ mb: 3 }}>
-            Run Quick Security Scan
+            Run Security Scan
           </Typography>
           <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-            Execute a quick security scan with 5 test cases per plugin. Upgrade for full customization.
+            Execute a security scan with your configured test cases per plugin.
           </Typography>
           
           <Paper elevation={2} sx={{ p: 3, mb: 3, backgroundColor: theme.palette.grey[50] }}>
@@ -795,7 +870,7 @@ export default function Review() {
             <Grid container spacing={2} sx={{ mb: 2 }}>
               <Grid item xs={12} sm={6} md={3}>
                 <Typography variant="body2" color="text.secondary">Test Cases</Typography>
-                <Typography variant="h6">{quickScanNumTests}</Typography>
+                <Typography variant="h6">{config.numTests || 5}</Typography>
               </Grid>
               <Grid item xs={12} sm={6} md={3}>
                 <Typography variant="body2" color="text.secondary">Debug Mode</Typography>
@@ -803,24 +878,23 @@ export default function Review() {
               </Grid>
               <Grid item xs={12} sm={6} md={3}>
                 <Typography variant="body2" color="text.secondary">Max Concurrency</Typography>
-                <Typography variant="h6">{quickScanMaxConcurrency}</Typography>
+                <Typography variant="h6">{maxConcurrency || defaultMaxConcurrency}</Typography>
               </Grid>
               <Grid item xs={12} sm={6} md={3}>
                 <Typography variant="body2" color="text.secondary">Delay (ms)</Typography>
-                <Typography variant="h6">{quickScanDelayMs}</Typography>
+                <Typography variant="h6">{delayMs || defaultDelayMs}</Typography>
               </Grid>
             </Grid>
             <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-              <Tooltip title={isSubscriber ? "Modify Run Settings" : "Upgrade to modify run settings"}>
+              <Tooltip title="Modify Run Settings">
                 <span>
                   <IconButton
-                    onClick={() => isSubscriber && setIsRunSettingsDialogOpen(true)}
-                    disabled={isRunning || !isSubscriber}
+                    onClick={() => setIsRunSettingsDialogOpen(true)}
+                    disabled={isRunning}
                     size="small"
                     sx={{ 
                       border: `1px solid ${theme.palette.divider}`,
-                      borderRadius: 1,
-                      opacity: isSubscriber ? 1 : 0.5
+                      borderRadius: 1
                     }}
                   >
                     <SettingsIcon fontSize="small" />
@@ -828,17 +902,52 @@ export default function Review() {
                 </span>
               </Tooltip>
               <Typography variant="body2" color="text.secondary">
-                {isSubscriber ? 'Click to modify settings' : 'Quick Scan settings (upgrade to customize)'}
+                Click to modify settings
               </Typography>
             </Box>
           </Paper>
           
+          {!configId && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Please save your test plan before generating or running tests.
+            </Alert>
+          )}
+          
           <Box sx={{ display: 'flex', gap: 3, alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <Button
+              variant="outlined"
+              size="large"
+              onClick={handleGenerateOnly}
+              disabled={isRunning || !configId}
+              startIcon={<BuildIcon />}
+              sx={{
+                minHeight: 56,
+                minWidth: 180,
+                fontSize: '1rem',
+                fontWeight: 'bold',
+                px: 3,
+                py: 2,
+                borderRadius: 2,
+                textTransform: 'none',
+                borderColor: theme.palette.primary.main,
+                color: theme.palette.primary.main,
+                '&:hover': {
+                  borderColor: theme.palette.primary.dark,
+                  backgroundColor: theme.palette.primary.light,
+                  transform: 'translateY(-1px)',
+                  boxShadow: theme.shadows[2]
+                },
+                transition: 'all 0.2s ease-in-out'
+              }}
+            >
+              Generate Only
+            </Button>
+            
             <Button
               variant="contained"
               size="large"
               onClick={handleRunWithSettings}
-              disabled={isRunning}
+              disabled={isRunning || !configId}
               startIcon={
                 isRunning ? <CircularProgress size={24} color="inherit" /> : <PlayArrowIcon />
               }

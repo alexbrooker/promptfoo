@@ -4,8 +4,183 @@ import logger from '../../logger';
 import { getRemoteGenerationUrl } from '../../redteam/remoteGeneration';
 import { authenticateSupabaseUser, supabase, type AuthenticatedRequest } from '../middleware/auth';
 import { userJobManager } from '../services/userJobManager';
+import { redteamGenerationService } from '../services/redteamGenerationService';
 
 export const redteamRouter = Router();
+
+// Generate test dataset only (new endpoint for phase separation)
+redteamRouter.post('/generate', authenticateSupabaseUser, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  if (!req.user) {
+    res.status(401).json({ error: 'User not authenticated' });
+    return;
+  }
+
+  const { config } = req.body;
+  
+  try {
+    logger.debug(`Received generate request for user ${req.user.id}:`, JSON.stringify(config, null, 2));
+    
+    // TODO: Add credit consumption for generation phase
+    const result = await redteamGenerationService.generateTestDataset(req.user.id, config);
+    
+    if (result.status === 'error') {
+      res.status(500).json({ 
+        error: 'Test generation failed',
+        message: result.error 
+      });
+      return;
+    }
+    
+    res.json({
+      jobId: result.jobId,
+      datasetId: result.datasetId,
+      testCount: result.testCount,
+      status: result.status
+    });
+    
+  } catch (error) {
+    logger.error(`Test generation failed: ${error}`);
+    res.status(500).json({ error: 'Test generation failed' });
+  }
+});
+
+// List user's generated datasets
+redteamRouter.get('/datasets', authenticateSupabaseUser, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  if (!req.user) {
+    res.status(401).json({ error: 'User not authenticated' });
+    return;
+  }
+
+  try {
+    const datasets = await redteamGenerationService.getUserDatasets(req.user.id);
+    res.json({ datasets });
+  } catch (error) {
+    logger.error(`Failed to fetch user datasets: ${error}`);
+    res.status(500).json({ error: 'Failed to fetch datasets' });
+  }
+});
+
+// Get dataset details
+redteamRouter.get('/datasets/:datasetId', authenticateSupabaseUser, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  if (!req.user) {
+    res.status(401).json({ error: 'User not authenticated' });
+    return;
+  }
+
+  const { datasetId } = req.params;
+  
+  try {
+    const dataset = await redteamGenerationService.getDatasetDetails(req.user.id, datasetId);
+    
+    if (!dataset) {
+      res.status(404).json({ error: 'Dataset not found or access denied' });
+      return;
+    }
+    
+    res.json(dataset);
+  } catch (error) {
+    logger.error(`Failed to fetch dataset details: ${error}`);
+    res.status(500).json({ error: 'Failed to fetch dataset details' });
+  }
+});
+
+// Execute existing dataset
+redteamRouter.post('/execute', authenticateSupabaseUser, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  if (!req.user) {
+    res.status(401).json({ error: 'User not authenticated' });
+    return;
+  }
+
+  // Check scan credits before proceeding
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('scan_credits, credits_used')
+    .eq('id', req.user.id)
+    .single();
+
+  if (profileError) {
+    logger.error(`Error fetching user profile: ${profileError.message}`);
+    res.status(500).json({ error: 'Failed to fetch user profile' });
+    return;
+  }
+
+  const scanCredits = profile?.scan_credits || 0;
+  if (scanCredits <= 0) {
+    res.status(402).json({ 
+      error: 'Insufficient scan credits', 
+      message: 'You need to purchase scan credits to execute a security scan.',
+      scanCredits,
+    });
+    return;
+  }
+
+  const { datasetId, providers } = req.body;
+  
+  try {
+    // Verify user owns this dataset
+    const dataset = await redteamGenerationService.getDatasetDetails(req.user.id, datasetId);
+    if (!dataset) {
+      res.status(404).json({ error: 'Dataset not found or access denied' });
+      return;
+    }
+    
+    // Consume the scan credit for execution phase
+    const { error: creditError } = await supabase
+      .from('profiles')
+      .update({
+        scan_credits: scanCredits - 1,
+        credits_used: (profile?.credits_used || 0) + 1,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', req.user.id);
+
+    if (creditError) {
+      logger.error(`Error consuming scan credit: ${creditError.message}`);
+      res.status(500).json({ error: 'Failed to consume scan credit' });
+      return;
+    }
+
+    // Create execution config using existing dataset
+    const executionConfig = {
+      ...dataset.metadata.original_config,
+      providers: providers || dataset.metadata.original_config.providers,
+      // Use pre-generated tests from dataset
+      tests: dataset.tests,
+    };
+    
+    // Enqueue execution job
+    const jobId = await userJobManager.enqueueJob(req.user.id, req.user.email || '', executionConfig);
+
+    // Log credit consumption
+    await supabase.from('usage_logs').insert({
+      user_id: req.user.id,
+      action: 'scan_credit_consumed',
+      metadata: {
+        scan_id: jobId,
+        dataset_id: datasetId,
+        phase: 'execution',
+        credits_remaining: scanCredits - 1,
+        credits_consumed: 1,
+      }
+    });
+
+    logger.info(`Consumed scan credit for dataset execution by user ${req.user.id}, remaining credits: ${scanCredits - 1}`);
+
+    const queuePosition = userJobManager.getQueuePosition(req.user.id, jobId);
+    
+    res.json({ 
+      jobId,
+      datasetId,
+      status: 'queued',
+      queuePosition,
+      message: queuePosition === 1 ? 'Starting execution...' : `Queued (position ${queuePosition})`,
+    });
+    
+  } catch (error) {
+    logger.error(`Dataset execution failed: ${error}`);
+    res.status(500).json({ error: 'Dataset execution failed' });
+  }
+});
 
 redteamRouter.post('/run', authenticateSupabaseUser, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   // Check scan credits before proceeding

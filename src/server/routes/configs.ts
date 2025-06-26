@@ -232,6 +232,68 @@ configsRouter.get('/:type/:id', authenticateSupabaseUser, async (req: Authentica
   }
 });
 
+configsRouter.put('/:type/:id', authenticateSupabaseUser, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const db = await getDb();
+  try {
+    const { type, id } = req.params;
+    const { name, config } = req.body;
+    
+    // First check if user owns this config
+    const { data: userConfigMapping, error: mappingError } = await supabase
+      .from('user_configs')
+      .select('config_id')
+      .eq('user_id', req.user!.id)
+      .eq('config_id', id)
+      .eq('config_type', type)
+      .single();
+    
+    if (mappingError || !userConfigMapping) {
+      res.status(404).json({ error: 'Config not found or access denied' });
+      return;
+    }
+    
+    // Update config in promptfoo database
+    const [result] = await db
+      .update(configsTable)
+      .set({
+        name,
+        config,
+        updatedAt: new Date().toISOString(),
+      })
+      .where(and(eq(configsTable.type, type), eq(configsTable.id, id)))
+      .returning({
+        id: configsTable.id,
+        updatedAt: configsTable.updatedAt,
+      });
+
+    if (!result) {
+      res.status(404).json({ error: 'Config not found' });
+      return;
+    }
+    
+    // Update the user mapping in Supabase
+    const { error: updateMappingError } = await supabase
+      .from('user_configs')
+      .update({
+        config_name: name,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('user_id', req.user!.id)
+      .eq('config_id', id);
+    
+    if (updateMappingError) {
+      logger.warn(`Failed to update user config mapping: ${updateMappingError.message}`);
+      // Continue anyway since the config is updated
+    }
+
+    logger.info(`Updated config ${id} of type ${type} for user ${req.user!.email}`);
+    res.json(result);
+  } catch (error) {
+    logger.error(`Error updating config: ${error}`);
+    res.status(500).json({ error: 'Failed to update config' });
+  }
+});
+
 configsRouter.delete('/:type/:id', authenticateSupabaseUser, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const db = await getDb();
   try {

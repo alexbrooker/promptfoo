@@ -57,6 +57,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Use Drizzle ORM for database operations
 - Workspaces include src/app and site directories
 
+## Frontend API Call Conventions
+
+- **ALWAYS use `callAuthenticatedApi()` for authenticated backend API calls**
+- Import from `@app/utils/api` or `../../../utils/api` (adjust path as needed)
+- Never use raw `fetch()` with manual Authorization headers for backend API calls
+- The `callAuthenticatedApi()` utility automatically handles:
+  - Authentication headers
+  - Proper API routing
+  - Error handling for unauthenticated requests
+- Pattern: Replace `fetch('/api/endpoint', { headers: { 'Authorization': ... } })` with `callAuthenticatedApi('/endpoint')`
+- This prevents "Unexpected token '<'" JSON parse errors from HTML login pages
+
 ## SaaS MVP Setup Plan
 
 - Define core product value proposition

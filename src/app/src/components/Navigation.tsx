@@ -98,16 +98,8 @@ function CreateButton() {
         <MenuItem onClick={handleClose} component={RouterLink} to="/redteam/quick-scan">
           Quick Scan
         </MenuItem>
-        <MenuItem 
-          disabled
-          sx={{ 
-            opacity: 0.5,
-            '&:hover': {
-              backgroundColor: 'transparent'
-            }
-          }}
-        >
-          Full Setup (Coming Soon)
+        <MenuItem onClick={handleClose} component={RouterLink} to="/redteam/setup">
+          Full Setup
         </MenuItem>
       </Menu>
     </>
@@ -128,7 +120,7 @@ function ComplianceDropdown() {
     setAnchorEl(null);
   };
 
-  const isActive = ['/test-plans', '/redteam/reports'].some((route) =>
+  const isActive = ['/test-plans', '/redteam/reports', '/redteam/datasets'].some((route) =>
     location.pathname.startsWith(route),
   );
 
@@ -142,6 +134,9 @@ function ComplianceDropdown() {
         Compliance
       </NavButton>
       <Menu anchorEl={anchorEl} open={open} onClose={handleClose}>
+        <MenuItem onClick={handleClose} component={RouterLink} to="/redteam/datasets">
+          My Datasets
+        </MenuItem>
         <MenuItem onClick={handleClose} component={RouterLink} to="/test-plans">
           Test Plans
         </MenuItem>
